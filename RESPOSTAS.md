@@ -279,4 +279,30 @@ imposta pela estrutura da aplicação como aconteceria com um framework.
 
 ## Funcionalidade adicional (Seção 2.1)
 
-_A preencher junto com a implementação da funcionalidade extra._
+**Escolhida:** rota de status/health-check por agência (`GET /status`),
+retornando o relógio de Lamport atual e a quantidade de contas sob
+responsabilidade daquela agência.
+
+```json
+{"idAgencia": 2, "timestampLamportAtual": 2, "quantidadeContas": 2}
+```
+
+**Por que essa:** entre as opções sugeridas no roteiro, essa foi a que mais
+diretamente serve para *observar* o próprio sistema distribuído que o sprint
+constrói - dá pra consultar, de fora, "em que ponto do relógio lógico cada
+agência está agora" sem precisar ler o `.jsonl` ou rodar `mesclar_logs.py`.
+Também é a base natural para health-checks de infraestrutura (ex.: um
+orquestrador decidindo se uma agência está "viva" e respondendo).
+
+**Decisão de design:** ao contrário das demais rotas, `/status` **não exige**
+JWT. Justificativa: um health-check precisa ser alcançável por ferramentas de
+monitoramento/infraestrutura que não têm (nem deveriam precisar de) uma
+sessão de usuário - exigir login para saber se o serviço está no ar
+inverteria a lógica de um endpoint de saúde. Como a rota não expõe dados de
+nenhuma conta específica (só um contador agregado), o risco de vazar
+informação sensível é baixo.
+
+**Evidência:** testado end-to-end com servidor real (agência 2, porta 4002):
+contador de Lamport e quantidade de contas em 0 antes de qualquer operação;
+após criar 2 contas, `/status` passou a reportar `timestampLamportAtual: 2` e
+`quantidadeContas: 2`, chamando a rota sem nenhum header de autenticação.
