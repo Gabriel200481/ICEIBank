@@ -1,15 +1,44 @@
 """ICEIBank - servico de agencia.
 
 Cada instancia deste app representa uma agencia. A identidade da agencia
-(idAgencia) e definida pela variavel de ambiente AGENCIA_ID na subida do
-processo (ver Parte C - api-rest-mvc).
+(id_agencia) e definida pela variavel de ambiente AGENCIA_ID na subida do
+processo, ou passada diretamente para criar_app() (usado nos testes, para
+isolar o estado de cada instancia).
 """
+
+import os
 
 from fastapi import FastAPI
 
-app = FastAPI(title="ICEIBank - Agencia")
+from src import config
+from src.controllers import contas_controller
+from src.services.event_log import RegistroEventos
+from src.services.lamport_clock import RelogioLamport
 
 
-@app.get("/")
-def raiz():
-    return {"servico": "ICEIBank - Agencia", "status": "ok"}
+def criar_app(id_agencia: int | None = None) -> FastAPI:
+    if id_agencia is None:
+        id_agencia = int(os.environ.get("AGENCIA_ID", "0"))
+
+    agencia_config = next((a for a in config.AGENCIAS if a["id"] == id_agencia), None)
+    if agencia_config is None:
+        raise RuntimeError(f"Agencia {id_agencia} nao configurada em config.py")
+
+    app = FastAPI(title=f"ICEIBank - Agencia {id_agencia}")
+
+    # Estado em memoria da agencia - sem banco de dados neste sprint (Parte C).
+    app.state.id_agencia = id_agencia
+    app.state.relogio = RelogioLamport()
+    app.state.registro = RegistroEventos(f"agencia-{id_agencia}")
+    app.state.contas = {}
+
+    app.include_router(contas_controller.router)
+
+    @app.get("/")
+    def raiz():
+        return {"servico": "ICEIBank - Agencia", "idAgencia": id_agencia, "status": "ok"}
+
+    return app
+
+
+app = criar_app()
