@@ -1,5 +1,24 @@
 # RESPOSTAS - Sprint 1 (ICEIBank)
 
+## Declaração de uso de IA
+
+Este sprint foi implementado com apoio extensivo do **Claude Code** (Anthropic)
+— não se limitou a rascunhos ou revisão pontual: a maior parte do código
+(backend Python/FastAPI, frontend, testes automatizados, workflow de Git/GitHub
+e este próprio arquivo de respostas) foi gerada com a IA, sob minha supervisão
+e direção, revisando cada Parte antes de seguir para a próxima. Isso vai além
+do "apoio a rascunhos" citado na nota de transparência do roteiro, então
+deixo isso explícito aqui em vez de subdeclarar o uso.
+
+Antes de entregar, revisei o código gerado e sou capaz de explicar e defender
+as decisões de arquitetura registradas neste arquivo (particionamento,
+relógio de Lamport, a limitação conhecida da Parte D, a separação de
+mecanismos de autenticação da Parte F, a escolha de funcionalidade adicional).
+Qualquer trecho específico que eu não conseguir explicar em uma arguição não
+deveria ter sido entregue como meu - assumo essa responsabilidade.
+
+---
+
 ## Escolha de linguagem (Seção 2.2)
 
 Linguagem escolhida: **Python 3.13**, com **FastAPI** + **Uvicorn**.
