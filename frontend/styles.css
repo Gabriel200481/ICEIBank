@@ -1,5 +1,6 @@
 :root {
-  --cor-fundo: #0f172a;
+  --cor-fundo-pagina: #f1f5f9;
+  --cor-cabecalho: #0f172a;
   --cor-cartao: #ffffff;
   --cor-texto: #1e293b;
   --cor-primaria: #2563eb;
@@ -13,27 +14,36 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  background: linear-gradient(180deg, var(--cor-fundo) 0%, #1e293b 260px, #f1f5f9 260px);
+  background: var(--cor-fundo-pagina);
   color: var(--cor-texto);
   min-height: 100vh;
 }
 
+/* Cabecalho: cor solida, altura definida pelo proprio conteudo - nunca
+   depende de quanto o resto da pagina mede (era a causa da sobreposicao). */
 .topo {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1rem;
-  padding: 1.5rem 2rem;
+  gap: 0.75rem 1.5rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--cor-cabecalho);
   color: white;
 }
 
 .topo h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
 }
 
 .agencia-config {
@@ -41,38 +51,40 @@ body {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
+  flex-wrap: wrap;
 }
 
 .agencia-config select {
   padding: 0.4rem 0.6rem;
   border-radius: 6px;
   border: none;
+  max-width: 100%;
 }
 
 main {
   max-width: 960px;
   margin: 0 auto;
-  padding: 0 1.5rem 3rem;
+  padding: 1.5rem 1rem 3rem;
 }
 
 .mensagem {
   max-width: 960px;
-  margin: 0 auto 1rem;
+  margin: 0 auto;
   padding: 0.75rem 1rem;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 0.9rem;
 }
 
 .mensagem.erro {
   background: #fee2e2;
   color: var(--cor-erro);
-  border: 1px solid #fecaca;
+  border-bottom: 1px solid #fecaca;
 }
 
 .mensagem.sucesso {
   background: #dcfce7;
   color: var(--cor-sucesso);
-  border: 1px solid #bbf7d0;
+  border-bottom: 1px solid #bbf7d0;
 }
 
 .cartao {
@@ -83,18 +95,19 @@ main {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
+.cartao h3 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 #secao-login {
   max-width: 360px;
   margin: 2rem auto 0;
 }
 
-fieldset {
-  border: none;
-}
-
-legend {
-  font-weight: 600;
-  padding: 0 0 0.5rem;
+#secao-login h2 {
+  margin-top: 0;
 }
 
 form {
@@ -112,6 +125,7 @@ label {
 }
 
 input {
+  width: 100%;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--cor-borda);
   border-radius: 6px;
@@ -136,6 +150,7 @@ button:hover {
 .botoes {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .link {
@@ -149,11 +164,15 @@ button:hover {
 .sessao {
   color: #475569;
   font-size: 0.9rem;
+  padding: 0.75rem 1rem 0;
+  margin: 0;
+  max-width: 960px;
+  margin-inline: auto;
 }
 
 .grade {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
   margin-top: 1rem;
 }
@@ -161,10 +180,22 @@ button:hover {
 .resultado {
   font-weight: 600;
   min-height: 1.2em;
+  overflow-wrap: anywhere;
 }
 
 .dica {
   font-size: 0.75rem;
   color: #64748b;
   margin: 0;
+}
+
+@media (max-width: 480px) {
+  .topo {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cartao {
+    padding: 1rem;
+  }
 }
