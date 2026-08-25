@@ -9,6 +9,7 @@ isolar o estado de cada instancia).
 import os
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from src import config
 from src.controllers import auth_controller, contas_controller, transferencias_controller
@@ -25,6 +26,16 @@ def criar_app(id_agencia: int | None = None) -> FastAPI:
         raise RuntimeError(f"Agencia {id_agencia} nao configurada em config.py")
 
     app = FastAPI(title=f"ICEIBank - Agencia {id_agencia}")
+
+    # CORS liberado (dev): o frontend estatico (servido em outra porta/origem)
+    # precisa chamar a API diretamente do navegador. Aceitavel neste sprint
+    # por nao haver cookies/sessao - so o JWT no header Authorization.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Estado em memoria da agencia - sem banco de dados neste sprint (Parte C).
     app.state.id_agencia = id_agencia

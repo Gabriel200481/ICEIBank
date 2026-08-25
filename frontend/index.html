@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ICEIBank</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topo">
+    <h1>ICEIBank</h1>
+    <div class="agencia-config">
+      <label for="baseUrl">Agência (porta de entrada)</label>
+      <select id="baseUrl">
+        <option value="http://localhost:4000">Agência 0 — localhost:4000</option>
+        <option value="http://localhost:4001">Agência 1 — localhost:4001</option>
+        <option value="http://localhost:4002">Agência 2 — localhost:4002</option>
+      </select>
+    </div>
+  </header>
+
+  <div id="mensagem" class="mensagem" hidden role="alert"></div>
+
+  <main>
+    <section id="secao-login" class="cartao">
+      <h2>Login</h2>
+      <form id="form-login">
+        <label>Usuário
+          <input type="text" id="login-usuario" value="aluno" required />
+        </label>
+        <label>Senha
+          <input type="password" id="login-senha" value="senha123" required />
+        </label>
+        <button type="submit">Entrar</button>
+      </form>
+    </section>
+
+    <section id="secao-app" hidden>
+      <p class="sessao">
+        Logado como <strong id="usuario-logado"></strong> na
+        <strong id="agencia-logada"></strong>
+        · <button id="botao-logout" class="link">sair</button>
+      </p>
+
+      <div class="grade">
+        <fieldset class="cartao">
+          <legend>Criar conta</legend>
+          <form id="form-criar-conta">
+            <label>ID da conta <input type="number" id="criar-id" min="0" required /></label>
+            <label>Nome do titular <input type="text" id="criar-nome" required /></label>
+            <label>Saldo inicial <input type="number" id="criar-saldo" value="0" min="0" step="0.01" /></label>
+            <button type="submit">Criar conta</button>
+          </form>
+        </fieldset>
+
+        <fieldset class="cartao">
+          <legend>Consultar saldo</legend>
+          <form id="form-saldo">
+            <label>ID da conta <input type="number" id="saldo-id" min="0" required /></label>
+            <button type="submit">Consultar</button>
+          </form>
+          <p id="resultado-saldo" class="resultado"></p>
+        </fieldset>
+
+        <fieldset class="cartao">
+          <legend>Depositar / Sacar</legend>
+          <form id="form-deposito-saque">
+            <label>ID da conta <input type="number" id="ds-id" min="0" required /></label>
+            <label>Valor <input type="number" id="ds-valor" min="0.01" step="0.01" required /></label>
+            <div class="botoes">
+              <button type="submit" data-acao="depositar">Depositar</button>
+              <button type="submit" data-acao="sacar">Sacar</button>
+            </div>
+          </form>
+        </fieldset>
+
+        <fieldset class="cartao">
+          <legend>Transferir</legend>
+          <form id="form-transferencia">
+            <label>Conta origem <input type="number" id="tr-origem" min="0" required /></label>
+            <label>Conta destino <input type="number" id="tr-destino" min="0" required /></label>
+            <label>Valor <input type="number" id="tr-valor" min="0.01" step="0.01" required /></label>
+            <button type="submit">Transferir</button>
+            <p class="dica">Funciona tanto para contas da mesma agência quanto para contas de agências diferentes — o backend decide.</p>
+          </form>
+        </fieldset>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

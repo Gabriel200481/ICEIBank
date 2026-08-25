@@ -1,0 +1,170 @@
+:root {
+  --cor-fundo: #0f172a;
+  --cor-cartao: #ffffff;
+  --cor-texto: #1e293b;
+  --cor-primaria: #2563eb;
+  --cor-primaria-escura: #1d4ed8;
+  --cor-erro: #dc2626;
+  --cor-sucesso: #16a34a;
+  --cor-borda: #e2e8f0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, var(--cor-fundo) 0%, #1e293b 260px, #f1f5f9 260px);
+  color: var(--cor-texto);
+  min-height: 100vh;
+}
+
+.topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  color: white;
+}
+
+.topo h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.agencia-config {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.agencia-config select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: none;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 1.5rem 3rem;
+}
+
+.mensagem {
+  max-width: 960px;
+  margin: 0 auto 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.mensagem.erro {
+  background: #fee2e2;
+  color: var(--cor-erro);
+  border: 1px solid #fecaca;
+}
+
+.mensagem.sucesso {
+  background: #dcfce7;
+  color: var(--cor-sucesso);
+  border: 1px solid #bbf7d0;
+}
+
+.cartao {
+  background: var(--cor-cartao);
+  border: 1px solid var(--cor-borda);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+#secao-login {
+  max-width: 360px;
+  margin: 2rem auto 0;
+}
+
+fieldset {
+  border: none;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 0 0.5rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+button {
+  cursor: pointer;
+  background: var(--cor-primaria);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+button:hover {
+  background: var(--cor-primaria-escura);
+}
+
+.botoes {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.link {
+  background: none;
+  color: var(--cor-primaria);
+  padding: 0;
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.sessao {
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.resultado {
+  font-weight: 600;
+  min-height: 1.2em;
+}
+
+.dica {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0;
+}

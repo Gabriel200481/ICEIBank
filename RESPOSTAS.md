@@ -226,13 +226,54 @@ valor padrão claramente marcado como "de desenvolvimento" no código.
 
 ## Parte G - Frontend (Seção 12)
 
-### Perguntas (Seção 12.3)
-
-_A preencher junto com a implementação da Parte G._
-
 ### Justificativas de design
 
-_A preencher junto com a implementação da Parte G._
+Frontend em HTML/CSS/JavaScript puro (sem framework/build step), servido por
+`python -m http.server`. Optei por isso em vez de React/Vue/Angular porque o
+roteiro permite explicitamente e o escopo é pequeno (5 formulários, sem
+roteamento) - um framework completo seria complexidade sem retorno aqui.
+
+O token fica em `localStorage` (chave `iceibank_token`), a escolha mais
+simples possível para persistir a sessão entre reloads da página sem exigir
+um backend de sessão. A troca de agência é um `<select>` no topo da página
+com as 3 URLs conhecidas (`localhost:4000-4002`), lido a cada requisição
+(`Api.baseUrl()`) - o frontend não faz nenhuma suposição sobre qual agência é
+"a certa", quem decide isso é sempre o backend (particionamento).
+
+### Perguntas (Seção 12.3)
+
+**1. Como o frontend "lembra" de reenviar o token em cada requisição depois do login?**
+
+O token retornado pelo `/auth/login` é salvo em `localStorage` (objeto
+`Sessao`). Toda chamada à API passa pela função central `Api.chamar()`, que
+monta o header `Authorization: Bearer <token>` automaticamente a partir do
+`localStorage` antes de cada `fetch` - as telas individuais (saldo, depósito,
+transferência) não precisam se preocupar com autenticação, só chamam
+`Api.chamar(caminho, opcoes)`.
+
+**2. Se o token expirar enquanto alguém está usando o frontend no meio de uma operação, o que acontece na sua implementação? A interface avisa a pessoa usuária, ou ela só vê um erro genérico?**
+
+A interface avisa de forma específica, não genérica. `Api.chamar()` trata o
+status 401 como um caso à parte: limpa a sessão salva, devolve a tela de
+login automaticamente e lança um erro com a mensagem
+`"Sessao encerrada (<motivo>). Faca login novamente."`, usando o `detail`
+que a API devolveu (ex.: "Token expirado."). Testado na prática subindo o
+backend com `JWT_EXPIRACAO_MINUTOS=0`: qualquer ação após o login volta para
+a tela de login com essa mensagem, em vez de travar num erro silencioso.
+
+**3. Esta unidade trata de arquitetura MVC. No seu frontend, onde fica o "M", o "V" e o "C"? Eles existem de forma clara, ou o código ficou mais misturado do que o padrão sugere?**
+
+Em `app.js` a separação é explícita, nomeada nos próprios comentários:
+`Sessao`/`Api` fazem o papel de **Model** (estado da sessão e acesso a
+dados), `Vista` é a **View** (toda leitura/escrita do DOM está concentrada
+ali) e `Controlador` é o **Controller** (liga os eventos de formulário às
+chamadas de `Api` e decide o que `Vista` deve mostrar em seguida). Dito
+isso, a separação é mais informal do que num framework MVC de verdade: não
+há um mecanismo de binding ou de eventos entre as camadas, é só
+`Controlador` chamando `Vista` e `Api` diretamente por importação de objeto
+global (sem módulos ES/build step) - ou seja, a fronteira existe e é
+identificável, mas é mantida por convenção/disciplina do código, não
+imposta pela estrutura da aplicação como aconteceria com um framework.
 
 ---
 

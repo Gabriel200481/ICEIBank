@@ -216,7 +216,15 @@ iceibank/
 
 ## Demonstração
 
-_Em construção - atualizado conforme as Partes C a G do Sprint 1 forem implementadas._
+Fluxo validado de ponta a ponta (backend real + frontend real, ver
+[evidencias/sprint1/](evidencias/sprint1/)):
+
+1. Login em `/auth/login` (tela de login do frontend)
+2. Criar conta 0 na Agência 0 e conta 1 na Agência 1 (trocando o seletor de agência)
+3. Consultar saldo, depositar
+4. Tentar sacar mais do que o saldo disponível → erro tratado, mensagem visível na tela
+5. Transferir da conta 0 (agência 0) para a conta 1 (agência 1) → transferência entre agências, confirmada nos saldos das duas agências
+6. `python mesclar_logs.py` → linha do tempo unificada das 3 agências, ordenada por relógio de Lamport
 
 ---
 
