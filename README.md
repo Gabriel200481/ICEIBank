@@ -1,5 +1,3 @@
----
-
 # ICEIBank
 
 > Banco simplificado dividido em agências, desenvolvido ao longo de 4 sprints para aplicar, na prática, os principais conceitos de Sistemas Distribuídos (relógio de Lamport, relógio vetorial, consenso e transações distribuídas) sobre uma API REST/MVC real.
