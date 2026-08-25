@@ -26,10 +26,27 @@
 
 | Sprint | Unidade da ementa       | Tecnologia         | Conceito de Sistemas Distribuídos | Status         |
 | ------ | ------------------------ | ------------------- | ----------------------------------- | -------------- |
-| 1      | U2 - Desenvolvimento Web | API REST / MVC       | Relógio lógico de Lamport         | Em andamento |
+| 1      | U2 - Desenvolvimento Web | API REST / MVC       | Relógio lógico de Lamport         | Código completo — [evidências de terminal pendentes](evidencias/sprint1/COMO-CAPTURAR-EVIDENCIAS.md) |
 | 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Não iniciada |
 | 3      | U4 - Desenvolvimento Móvel | App Flutter          | Consenso (eleição de líder)        | Não iniciada |
 | 4      | U5 - Computação em Nuvem | Containers            | Transações distribuídas (2PC/Saga) | Não iniciada |
+
+**Sprint 1 - checklist de entrega** (seção 13 do roteiro):
+
+- [x] Repositório com histórico de commits incremental (uma branch + PR por issue)
+- [x] 3 agências rodando simultaneamente, particionamento respeitado
+- [x] CRUD de contas + depósito/saque com timestamp de Lamport
+- [x] Transferência local e entre agências
+- [x] Falha conhecida reproduzida e documentada (não escondida)
+- [x] `mesclar_logs.py` funcionando, testado com concorrência real
+- [x] Autenticação JWT (login, expiração, proteção de rotas, 3 cenários testados)
+- [x] Frontend funcional consumindo a API autenticada (testado em navegador real)
+- [x] Funcionalidade adicional (`GET /status`) implementada e documentada
+- [x] `RESPOSTAS.md` completo (todas as perguntas + justificativas de design)
+- [ ] `evidencias/sprint1/` completa — prints de frontend já estão aqui; os
+      prints de terminal (Partes D/E/F e funcionalidade adicional) seguem o
+      guia em [evidencias/sprint1/COMO-CAPTURAR-EVIDENCIAS.md](evidencias/sprint1/COMO-CAPTURAR-EVIDENCIAS.md)
+- [ ] Vídeo de apresentação
 
 ---
 
@@ -230,7 +247,7 @@ Fluxo validado de ponta a ponta (backend real + frontend real, ver
 
 ## Testes
 
-Cada peça é testada isoladamente (unitário) antes de ser integrada à API, e a integração é validada com as 3 agências rodando de verdade (requisições HTTP reais via `curl`/`Invoke-RestMethod`).
+Cada peça é testada isoladamente (unitário) antes de ser integrada à API, e a integração é validada com as 3 agências rodando de verdade (requisições HTTP reais via `curl`/`Invoke-RestMethod`, e o frontend dirigido por um navegador real). 48 testes automatizados (pytest) no Sprint 1.
 
 ```powershell
 cd agencia
