@@ -1,8 +1,10 @@
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from src import config
+from src.controllers.auth_controller import exigir_token_de_servico, exigir_usuario_autenticado
+from src.services import auth_service
 
 router = APIRouter()
 
@@ -19,7 +21,7 @@ class CreditoRemotoBody(BaseModel):
     origemAgencia: int
 
 
-@router.post("/transferencias")
+@router.post("/transferencias", dependencies=[Depends(exigir_usuario_autenticado)])
 def transferir(body: TransferenciaBody, request: Request):
     estado = request.app.state
 
@@ -64,6 +66,7 @@ def transferir(body: TransferenciaBody, request: Request):
         resposta = httpx.post(
             f"{url_destino}/contas/{body.idDestino}/creditar-remoto",
             json={"valor": body.valor, "timestampLamport": ts_envio, "origemAgencia": estado.id_agencia},
+            headers={"Authorization": f"Service {auth_service.SERVICE_TOKEN}"},
             timeout=5.0,
         )
         resposta.raise_for_status()
@@ -85,7 +88,7 @@ def transferir(body: TransferenciaBody, request: Request):
         )
 
 
-@router.post("/contas/{id_conta}/creditar-remoto")
+@router.post("/contas/{id_conta}/creditar-remoto", dependencies=[Depends(exigir_token_de_servico)])
 def creditar_remoto(id_conta: int, body: CreditoRemotoBody, request: Request):
     estado = request.app.state
 

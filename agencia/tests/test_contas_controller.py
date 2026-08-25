@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app import criar_app
+from src.services import auth_service
 
 
 @pytest.fixture
@@ -9,7 +10,11 @@ def cliente(tmp_path):
     app = criar_app(id_agencia=0)
     # isola os logs de teste do diretorio real agencia/data
     app.state.registro.caminho_arquivo = tmp_path / "eventos-teste.jsonl"
-    return TestClient(app)
+    cliente = TestClient(app)
+    # rotas de contas exigem JWT (Parte F) - anexa um token valido por padrao,
+    # os testes especificos de autenticacao ficam em test_auth_controller.py
+    cliente.headers.update({"Authorization": f"Bearer {auth_service.criar_token('aluno')}"})
+    return cliente
 
 
 def test_criar_conta_na_agencia_correta(cliente):

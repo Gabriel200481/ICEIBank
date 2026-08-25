@@ -140,13 +140,87 @@ são concorrentes (quando nenhum vetor domina o outro em todas as posições).
 
 ## Parte F - Autenticação JWT (Seção 11)
 
-### Perguntas (Seção 11.3)
-
-_A preencher junto com a implementação da Parte F._
-
 ### Justificativas de design
 
-_A preencher junto com a implementação da Parte F._
+**Formato das credenciais:** login por `usuario`/`senha` (`POST /auth/login`).
+Optei por um usuário de demonstração fixo (`aluno` / `senha123`), em memória,
+porque o roteiro não pede uma tabela de usuários/cadastro no Sprint 1 - o
+objetivo desta parte é o mecanismo de autenticação (emissão, validação,
+expiração, proteção de rota), não um sistema de identidade completo. Criar um
+cadastro de usuários "de mentira" só para ter uma tabela pareceria mais
+completo, mas seria complexidade sem função real neste sprint.
+
+**Tempo de expiração:** 15 minutos (`JWT_EXPIRACAO_MINUTOS`, configurável por
+variável de ambiente). Curto o suficiente para limitar a janela de uso de um
+token vazado, longo o suficiente para não expirar no meio de uma sessão
+normal de uso do frontend.
+
+**A chamada `creditar-remoto` (agência-a-agência) usa um mecanismo diferente
+do JWT do frontend.** Implementei um **service token** - um segredo
+compartilhado entre as 3 agências (`AGENCIA_SERVICE_TOKEN`, mesmo valor
+porque é o mesmo código-fonte rodando 3 vezes), enviado no cabeçalho
+`Authorization: Service <token>` (prefixo diferente de `Bearer`, para deixar
+explícito na própria requisição que se trata de um mecanismo distinto).
+
+Justificativa: a chamada `creditar-remoto` não é feita "em nome" de nenhum
+usuário logado - é uma chamada de sistema-para-sistema, disparada pela
+agência de origem depois que ela já validou o JWT do usuário que pediu a
+transferência. Usar o mesmo JWT de usuário nessa chamada teria dois
+problemas: (1) o JWT do usuário representa uma sessão pessoal com expiração
+pensada para uso interativo - não faz sentido semântico "logar" uma agência
+como se fosse um aluno; e (2) precisaria repassar o token do usuário adiante
+de processo em processo, acoplando a validade da transferência interna à
+sessão daquele usuário especificamente (se o token dele expirasse um segundo
+depois do débito, o crédito remoto falharia por um motivo que não tem nada a
+ver com a operação em si). Um token de serviço fixo, validado
+independentemente do usuário, separa claramente "quem está autorizado a usar
+a API" (usuário com JWT) de "quem está autorizado a falar com outra agência"
+(a própria infraestrutura do ICEIBank).
+
+### Perguntas (Seção 11.3)
+
+**1. Qual a diferença entre autenticação e autorização? Sua implementação verifica só uma das duas, ou as duas? Um usuário autenticado consegue sacar de uma conta que não é dele?**
+
+Autenticação é confirmar *quem* está fazendo a requisição (o token é válido e
+não expirou → é realmente o portador de uma sessão legítima). Autorização é
+decidir *o que* esse usuário específico tem permissão de fazer. A
+implementação atual só cobre autenticação: `exigir_usuario_autenticado`
+verifica que existe um JWT válido, mas não checa se o `sub` do token (o
+usuário logado) é "dono" da conta que está sendo movimentada. Na prática,
+hoje, **sim**: qualquer usuário autenticado com o único login de demonstração
+consegue sacar/depositar/consultar qualquer conta da agência, porque não há
+vínculo entre conta e usuário no modelo de dados deste sprint. Isso é uma
+limitação real e conhecida - resolvê-la exigiria um modelo de "dono da
+conta" e uma checagem de autorização por conta, que ficou fora do escopo
+aqui (o roteiro pede autenticação, não um controle de acesso por
+titularidade).
+
+**2. Por que o servidor não precisa consultar um banco de dados para validar a assinatura de um JWT a cada requisição? Implicações para escalabilidade?**
+
+Porque a validade do token é verificável matematicamente com a própria chave
+secreta (HMAC-SHA256, `jwt.decode`): o servidor recalcula a assinatura a
+partir do payload e da chave e compara com a assinatura recebida - se
+baterem, o conteúdo não foi alterado desde que o próprio servidor o assinou
+no login. Isso significa que qualquer instância da agência (ou, no limite,
+qualquer serviço que conheça a mesma `SECRET_KEY`) pode validar o token
+sozinha, sem round-trip a um banco ou a um serviço de sessão central. Para
+escalabilidade isso é uma vantagem grande: elimina um ponto de contenção
+(consulta de sessão a cada requisição) e permite escalar horizontalmente sem
+compartilhar estado de sessão entre instâncias - o preço pago é que revogar
+um token individual antes do prazo de expiração não é trivial (não há uma
+tabela de sessões para apagar uma linha).
+
+**3. O que aconteceria com a segurança do sistema se a chave secreta usada para assinar o JWT vazasse?**
+
+Qualquer pessoa de posse da chave conseguiria forjar tokens válidos para
+qualquer usuário (inclusive usuários que não existem), passando por
+autenticada em qualquer rota protegida - a garantia inteira do JWT depende do
+segredo permanecer secreto. Seria equivalente a vazar a senha mestra do
+sistema. A mitigação é rotacionar a chave imediatamente (invalidando de uma
+vez todos os tokens já emitidos, inclusive os legítimos, o que forçaria todo
+mundo a logar de novo) e, estruturalmente, nunca commitar a chave no
+repositório - por isso `JWT_SECRET` é lido de variável de ambiente, com um
+valor padrão claramente marcado como "de desenvolvimento" no código.
 
 ---
 

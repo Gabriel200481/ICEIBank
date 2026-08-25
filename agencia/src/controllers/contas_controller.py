@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from src import config
+from src.controllers.auth_controller import exigir_usuario_autenticado
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(exigir_usuario_autenticado)])
 
 
 class CriarContaBody(BaseModel):
