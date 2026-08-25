@@ -139,6 +139,15 @@ Agência de origem                         Agência de destino
 - Python 3.11+ (testado com 3.13)
 - pip
 
+### Variáveis de ambiente (opcionais - têm valor padrão de desenvolvimento)
+
+```env
+JWT_SECRET=troque-por-um-segredo-forte-em-producao
+JWT_EXPIRACAO_MINUTOS=15
+AGENCIA_SERVICE_TOKEN=segredo-compartilhado-entre-agencias
+OFFSET=0
+```
+
 ### Back-end - subindo as 3 agências
 
 ```powershell

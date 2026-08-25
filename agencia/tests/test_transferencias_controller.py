@@ -6,12 +6,17 @@ from fastapi.testclient import TestClient
 
 from src.app import criar_app
 from src.controllers import transferencias_controller
+from src.services import auth_service
 
 
 def _criar_cliente(tmp_path, id_agencia):
     app = criar_app(id_agencia=id_agencia)
     app.state.registro.caminho_arquivo = tmp_path / f"eventos-agencia-{id_agencia}.jsonl"
-    return app, TestClient(app)
+    cliente = TestClient(app)
+    # rotas de contas/transferencias exigem JWT de usuario (Parte F);
+    # creditar-remoto exige o service token, anexado a parte na chamada real.
+    cliente.headers.update({"Authorization": f"Bearer {auth_service.criar_token('aluno')}"})
+    return app, cliente
 
 
 @pytest.fixture
@@ -52,9 +57,9 @@ def test_transferencia_entre_agencias_sucesso(tmp_path, monkeypatch):
     cliente_origem.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 100})
     cliente_destino.post("/contas", json={"id": 1, "nomeAluno": "Bia", "saldoInicial": 0})
 
-    def fake_post(url, json=None, timeout=None):
+    def fake_post(url, json=None, headers=None, timeout=None):
         caminho = urlparse(url).path
-        return cliente_destino.post(caminho, json=json)
+        return cliente_destino.post(caminho, json=json, headers=headers)
 
     monkeypatch.setattr(transferencias_controller.httpx, "post", fake_post)
 
@@ -73,7 +78,7 @@ def test_transferencia_entre_agencias_falha_agencia_fora_do_ar(tmp_path, monkeyp
     app_origem, cliente_origem = _criar_cliente(tmp_path, id_agencia=0)
     cliente_origem.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 100})
 
-    def fake_post_falha(url, json=None, timeout=None):
+    def fake_post_falha(url, json=None, headers=None, timeout=None):
         raise httpx.ConnectError("Connection refused - agencia de destino fora do ar")
 
     monkeypatch.setattr(transferencias_controller.httpx, "post", fake_post_falha)
@@ -98,6 +103,7 @@ def test_creditar_remoto_usa_ao_receber_do_relogio_de_lamport(tmp_path):
     resposta = cliente_destino.post(
         "/contas/1/creditar-remoto",
         json={"valor": 50, "timestampLamport": 3, "origemAgencia": 0},
+        headers={"Authorization": f"Service {auth_service.SERVICE_TOKEN}"},
     )
 
     assert resposta.status_code == 200
