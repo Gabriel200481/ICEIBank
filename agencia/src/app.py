@@ -11,7 +11,7 @@ import os
 from fastapi import FastAPI
 
 from src import config
-from src.controllers import contas_controller
+from src.controllers import contas_controller, transferencias_controller
 from src.services.event_log import RegistroEventos
 from src.services.lamport_clock import RelogioLamport
 
@@ -33,6 +33,7 @@ def criar_app(id_agencia: int | None = None) -> FastAPI:
     app.state.contas = {}
 
     app.include_router(contas_controller.router)
+    app.include_router(transferencias_controller.router)
 
     @app.get("/")
     def raiz():

@@ -51,7 +51,42 @@ o processo seja rodado com múltiplos workers/threads no futuro.
 
 ## Parte D - Perguntas (Seção 8.3)
 
-_A preencher junto com a implementação da Parte D._
+**1. No trecho `agenciaDestino === idAgencia`, por que a transferência local não precisa da lógica de `ao_enviar()`/`ao_receber()` do relógio de Lamport, enquanto a transferência entre agências precisa?**
+
+Porque `ao_enviar()`/`ao_receber()` só fazem sentido quando existe uma
+mensagem cruzando a fronteira entre dois processos diferentes - é o mecanismo
+que propaga causalidade de um relógio lógico para outro. Na transferência
+local, débito e crédito acontecem dentro do mesmo processo, com acesso direto
+ao mesmo `RelogioLamport`; usar `evento_local()` duas vezes já é suficiente
+para ordenar os dois eventos entre si, porque não há necessidade de
+sincronizar o relógio com o de "outro processo" - só existe um processo
+envolvido.
+
+**2. Reproduza a falha conhecida e observe o saldo da conta de origem depois do erro. Ele foi revertido? O que isso significa em termos de consistência do sistema bancário?**
+
+Não, o saldo **não é revertido** (testado com as 3 agências rodando de
+verdade: agência 0 com R$100, debitou R$10 numa transferência para a agência
+2 derrubada no meio do caminho, resultado HTTP 502, saldo final R$60 - o
+valor debitado "sumiu"). Isso significa que o sistema, hoje, não garante
+**atomicidade** entre o débito local e o crédito remoto: a operação de
+transferência entre agências não é tratada como uma unidade indivisível.
+Do ponto de vista de um banco real isso é inaceitável (dinheiro não pode
+desaparecer), mas aqui é proposital - o log `TRANSFERENCIA_FALHOU` deixa a
+inconsistência visível e rastreável, em vez de escondê-la, para ser corrigida
+de verdade no Sprint 4.
+
+**3. Pensando à frente para o Sprint 4: cite duas formas possíveis de corrigir esse problema.**
+
+- **Two-Phase Commit (2PC):** um coordenador pergunta às duas agências
+  ("posso debitar?", "posso creditar?") na fase de *prepare*; só depois que
+  ambas confirmarem que estão prontas (e com o valor reservado) o coordenador
+  manda a fase de *commit*. Se qualquer agência falhar ou não responder no
+  prepare, a operação inteira é abortada e nada é aplicado.
+- **Saga (compensação):** a transferência é dividida em passos locais
+  (debitar na origem, depois creditar no destino), cada um com uma ação de
+  compensação equivalente. Se o passo de crédito falhar, a saga executa a
+  compensação do passo de débito (estornar o valor na origem)
+  automaticamente, em vez de deixar a inconsistência registrada só no log.
 
 ---
 
