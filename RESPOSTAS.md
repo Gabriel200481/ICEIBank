@@ -92,7 +92,49 @@ de verdade no Sprint 4.
 
 ## Parte E - Perguntas (Seção 10.3)
 
-_A preencher junto com a implementação da Parte E._
+Execução real (3 agências simultâneas, contas criadas e depositadas quase ao
+mesmo tempo nas 3, seguidas de uma transferência entre agência 0 e 1):
+
+```
+[Lamport 1] agencia-0 - CRIAR_CONTA {id: 0, ...}
+[Lamport 1] agencia-1 - CRIAR_CONTA {id: 1, ...}
+[Lamport 1] agencia-2 - CRIAR_CONTA {id: 2, ...}
+[Lamport 2] agencia-0 - DEPOSITO {id: 0, valor: 5, ...}
+[Lamport 2] agencia-1 - DEPOSITO {id: 1, valor: 5, ...}
+[Lamport 2] agencia-2 - DEPOSITO {id: 2, valor: 5, ...}
+[Lamport 3] agencia-0 - TRANSFERENCIA_DEBITO {idOrigem: 0, idDestino: 1, valor: 20}
+[Lamport 5] agencia-1 - TRANSFERENCIA_CREDITO_REMOTO {idConta: 1, valor: 20, origemAgencia: 0}
+```
+
+**1. O relógio de Lamport garante que, se A aconteceu antes de B causalmente, `timestamp(A) < timestamp(B)`. Ele não garante a volta. O que isso significa na prática quando você vê dois eventos com timestamps diferentes na linha do tempo, mas sem saber se um realmente influenciou o outro?**
+
+Significa que a ordem por timestamp, sozinha, não permite concluir causalidade
+- só permite descartá-la em um sentido (se `timestamp(A) > timestamp(B)`, então
+A com certeza não foi causado por B). No exemplo acima, `TRANSFERENCIA_DEBITO`
+(ts 3, agência 0) e o segundo `DEPOSITO` da agência 2 (ts 2) têm timestamps
+diferentes, mas nada na transferência dependeu daquele depósito - são eventos
+de processos diferentes que, por coincidência de tempo de execução, ficaram
+com timestamps próximos/ordenados sem nenhuma relação causal real entre si. A
+linha do tempo por Lamport é útil para reconstruir *uma* ordem total possível
+e consistente com a causalidade observada, mas não é a *única* verdade sobre
+"o que aconteceu antes do quê" no mundo real.
+
+**2. Baseado no que você observou: o relógio de Lamport, sozinho, seria suficiente para um sistema que precisa distinguir com certeza "A e B são concorrentes" de "A aconteceu antes de B"? Por que isso motiva o relógio vetorial do Sprint 2?**
+
+Não. Os três `CRIAR_CONTA` acima (agências 0, 1 e 2) empataram em `timestamp
+1` porque são genuinamente concorrentes - nenhuma agência tinha conhecimento
+da existência das outras duas quando processou seu próprio evento. Mas o
+Lamport, sozinho, não *prova* isso: ele só permitiu que os três ficassem
+empatados porque não havia mensagem entre eles até aquele ponto; se por acaso
+o agendamento do SO tivesse feito as chamadas em outra ordem, os três
+poderiam ter saído com timestamps 1, 2 e 3 sem que isso significasse relação
+causal alguma entre eles - um observador não teria como diferenciar esse caso
+de uma cadeia causal real de três eventos em série só olhando os números.
+É exatamente essa ambiguidade que motiva o relógio vetorial: em vez de um
+único contador, cada processo mantém um vetor com o contador de *todos* os
+processos que conhece, permitindo comparar dois timestamps e concluir com
+certeza matemática se um evento aconteceu-antes do outro, depois-de, ou se
+são concorrentes (quando nenhum vetor domina o outro em todas as posições).
 
 ---
 
