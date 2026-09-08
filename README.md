@@ -24,7 +24,7 @@
 
 | Sprint | Unidade da ementa       | Tecnologia         | Conceito de Sistemas Distribuídos | Status         |
 | ------ | ------------------------ | ------------------- | ----------------------------------- | -------------- |
-| 1      | U2 - Desenvolvimento Web | API REST / MVC       | Relógio lógico de Lamport         | Código e evidências completos — falta só o vídeo de apresentação |
+| 1      | U2 - Desenvolvimento Web | API REST / MVC       | Relógio lógico de Lamport         | Concluída |
 | 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Não iniciada |
 | 3      | U4 - Desenvolvimento Móvel | App Flutter          | Consenso (eleição de líder)        | Não iniciada |
 | 4      | U5 - Computação em Nuvem | Containers            | Transações distribuídas (2PC/Saga) | Não iniciada |
@@ -42,7 +42,7 @@
 - [x] Funcionalidade adicional (`GET /status`) implementada e documentada
 - [x] `RESPOSTAS.md` completo (todas as perguntas + justificativas de design)
 - [x] `evidencias/sprint1/` completa (11 prints: frontend + terminal, todos reais)
-- [ ] Vídeo de apresentação
+- [x] [Vídeo de apresentação](evidencias/sprint1/apresentacao-sprint1.mp4)
 
 ---
 
