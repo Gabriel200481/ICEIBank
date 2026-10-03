@@ -21,7 +21,7 @@ import pika
 EXCHANGE = "iceibank.eventos"
 
 
-def _url() -> str:
+def url_rabbitmq() -> str:
     url = os.environ.get("RABBITMQ_URL")
     if not url:
         raise RuntimeError(
@@ -32,7 +32,7 @@ def _url() -> str:
 
 
 def publicar(routing_key: str, mensagem: dict) -> None:
-    conexao = pika.BlockingConnection(pika.URLParameters(_url()))
+    conexao = pika.BlockingConnection(pika.URLParameters(url_rabbitmq()))
     try:
         canal = conexao.channel()
         canal.exchange_declare(exchange=EXCHANGE, exchange_type="topic", durable=True)
@@ -55,7 +55,7 @@ def assinar(id_agencia: int, ao_receber_mensagem: Callable[[dict], None]) -> thr
     """
 
     def _consumir() -> None:
-        conexao = pika.BlockingConnection(pika.URLParameters(_url()))
+        conexao = pika.BlockingConnection(pika.URLParameters(url_rabbitmq()))
         canal = conexao.channel()
         canal.exchange_declare(exchange=EXCHANGE, exchange_type="topic", durable=True)
 

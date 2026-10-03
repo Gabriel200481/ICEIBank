@@ -578,3 +578,37 @@ bruta, ou (c) processar isso de forma incremental/streaming conforme os
 eventos chegam, em vez de recarregar e comparar tudo do zero a cada
 execução - cada evento novo só precisaria ser comparado contra os eventos
 "recentes" ainda relevantes, não contra todo o histórico.
+
+---
+
+## Funcionalidade adicional - Sprint 2 (Seção 2.1)
+
+**Escolhida:** fila de auditoria (`agencia/auditoria.py`) - um consumidor
+extra, independente das 3 agências, que escuta **todos** os créditos
+publicados por qualquer uma delas e mantém um log central
+(`agencia/data/auditoria.jsonl`).
+
+**Por que essa:** entre as opções sugeridas, essa foi a que mais
+diretamente explora um recurso do RabbitMQ que o resto da implementação não
+usa - as filas de cada agência se ligam à exchange com a *routing key*
+**exata** delas (`agencia.0.creditar`, por exemplo), então só recebem
+mensagens destinadas a si mesmas. A fila de auditoria se liga com um
+**padrão coringa** (`agencia.*.creditar`), recebendo uma cópia de toda
+mensagem de crédito publicada, de qualquer agência, sem interferir no
+roteamento normal - a exchange topic entrega a mesma mensagem para cada
+fila cuja *routing key* bate com ela, então a agência de destino recebe a
+sua cópia normalmente e a auditoria recebe a dela, de forma independente.
+
+**Como usar:** roda como um processo separado, em paralelo às 3 agências:
+
+```powershell
+cd agencia
+python auditoria.py
+```
+
+**Evidência:** testado end-to-end com 2 agências reais rodando + o
+`auditoria.py` como terceiro processo. Uma transferência entre agências
+(conta 0 → conta 1, valor 35) gerou, no arquivo `auditoria.jsonl`, o
+registro `{"horaAuditoria": "...", "mensagem": {"idConta": 1, "valor": 35.0,
+"vetorEnvio": [3,0,0], "origemAgencia": 0}}` - capturado de forma
+independente do processamento normal feito pela Agência 1.
