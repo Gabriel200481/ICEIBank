@@ -1,17 +1,26 @@
 :root {
-  --cor-fundo-pagina: #f1f5f9;
-  --cor-cabecalho: #0f172a;
-  --cor-cartao: #ffffff;
-  --cor-texto: #1e293b;
-  --cor-primaria: #2563eb;
-  --cor-primaria-escura: #1d4ed8;
-  --cor-erro: #dc2626;
-  --cor-sucesso: #16a34a;
-  --cor-borda: #e2e8f0;
+  --ink: #0b1e33;
+  --ink-raised: #122a45;
+  --surface: #e7ecf1;
+  --panel: #ffffff;
+  --credit: #0f6b4c;
+  --credit-dark: #0b5038;
+  --debit: #8c2f1b;
+  --debit-dark: #6f2414;
+  --line: #c7d1da;
+  --muted: #5b6b7a;
+  --focus: #2f6fb3;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* O atributo "hidden" precisa vencer qualquer "display" definido por
+   classe (ex.: .acesso define display:flex, que do contrario sobrescreveria
+   o display:none do [hidden] por ter a mesma especificidade). */
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -22,92 +31,189 @@ body {
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  background: var(--cor-fundo-pagina);
-  color: var(--cor-texto);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
-/* Cabecalho: cor solida, altura definida pelo proprio conteudo - nunca
-   depende de quanto o resto da pagina mede (era a causa da sobreposicao). */
+h1,
+h2,
+.marca,
+.acesso-rotulo {
+  font-family: "Roboto Slab", Georgia, serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---------- Cabecalho: barra de console, nunca depende da altura do
+   conteudo abaixo (evita o problema de sobreposicao ja corrigido). ---------- */
 .topo {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.75rem 1.5rem;
-  padding: 1.25rem 1.5rem;
-  background: var(--cor-cabecalho);
-  color: white;
+  padding: 1.1rem 1.5rem;
+  background: var(--ink);
+  color: var(--surface);
+  border-bottom: 3px solid var(--credit);
 }
 
-.topo h1 {
-  margin: 0;
-  font-size: 1.4rem;
+.marca {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #ffffff;
 }
 
-.agencia-config {
+.rota {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  flex-wrap: wrap;
+  gap: 0.6rem;
+  font-size: 0.82rem;
 }
 
-.agencia-config select {
+.rota label {
+  color: #9fb3c8;
+}
+
+.rota select {
+  font-family: inherit;
+  font-size: 0.82rem;
   padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  border: none;
+  background: var(--ink-raised);
+  color: #ffffff;
+  border: 1px solid #28435f;
+  border-radius: 3px;
   max-width: 100%;
 }
 
-main {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-}
-
+/* ---------- Mensagem: linha de status, como um log do console. ---------- */
 .mensagem {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 0.75rem 1rem;
-  border-radius: 0;
-  font-size: 0.9rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.88rem;
+  border-left: 4px solid transparent;
+  background: var(--panel);
 }
 
 .mensagem.erro {
-  background: #fee2e2;
-  color: var(--cor-erro);
-  border-bottom: 1px solid #fecaca;
+  border-left-color: var(--debit);
+  color: var(--debit-dark);
+  background: #fbeeec;
 }
 
 .mensagem.sucesso {
-  background: #dcfce7;
-  color: var(--cor-sucesso);
-  border-bottom: 1px solid #bbf7d0;
+  border-left-color: var(--credit);
+  color: var(--credit-dark);
+  background: #eaf4ef;
 }
 
-.cartao {
-  background: var(--cor-cartao);
-  border: 1px solid var(--cor-borda);
-  border-radius: 12px;
-  padding: 1.25rem 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+main {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-.cartao h3 {
-  margin: 0 0 1rem;
-  font-size: 1rem;
+/* ---------- Tela de acesso: painel sobre fundo cheio de tinta, preenche
+   o espaco restante abaixo do cabecalho sem depender de um numero magico. ---------- */
+.acesso {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  background: var(--ink);
+}
+
+.acesso-painel {
+  width: 100%;
+  max-width: 320px;
+  background: var(--panel);
+  padding: 2rem 1.75rem;
+  border-radius: 2px;
+}
+
+.acesso-rotulo {
+  margin: 0 0 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
+  color: var(--ink);
 }
 
-#secao-login {
-  max-width: 360px;
-  margin: 2rem auto 0;
+/* ---------- Sessao ---------- */
+.sessao {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
-#secao-login h2 {
-  margin-top: 0;
+.sessao span {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.link {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--focus);
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---------- Livro-razao: lancamentos em coluna, separados por linha. ---------- */
+.livro {
+  border-top: 1px solid var(--line);
+  padding-bottom: 3rem;
+}
+
+.lancamento {
+  display: flex;
+  gap: 1.1rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.codigo {
+  flex: 0 0 auto;
+  width: 3rem;
+  padding-top: 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--credit);
+}
+
+.corpo {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.corpo h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 form {
@@ -120,82 +226,97 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  font-size: 0.85rem;
-  color: #475569;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 input {
   width: 100%;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid var(--cor-borda);
-  border-radius: 6px;
-  font-size: 0.95rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+
+input:focus-visible {
+  border-color: var(--focus);
 }
 
 button {
+  align-self: flex-start;
   cursor: pointer;
-  background: var(--cor-primaria);
-  color: white;
+  background: var(--ink);
+  color: #ffffff;
   border: none;
-  border-radius: 6px;
-  padding: 0.55rem 1rem;
-  font-size: 0.9rem;
-  font-weight: 600;
+  border-radius: 2px;
+  padding: 0.55rem 1.1rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 button:hover {
-  background: var(--cor-primaria-escura);
+  background: var(--ink-raised);
+}
+
+.acesso-painel button {
+  align-self: stretch;
+  background: var(--credit);
+}
+
+.acesso-painel button:hover {
+  background: var(--credit-dark);
 }
 
 .botoes {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.6rem;
   flex-wrap: wrap;
 }
 
-.link {
-  background: none;
-  color: var(--cor-primaria);
-  padding: 0;
-  font-weight: 500;
-  text-decoration: underline;
+button.credito {
+  background: var(--credit);
 }
 
-.sessao {
-  color: #475569;
-  font-size: 0.9rem;
-  padding: 0.75rem 1rem 0;
-  margin: 0;
-  max-width: 960px;
-  margin-inline: auto;
+button.credito:hover {
+  background: var(--credit-dark);
 }
 
-.grade {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
+button.debito {
+  background: var(--debit);
+}
+
+button.debito:hover {
+  background: var(--debit-dark);
 }
 
 .resultado {
+  margin: 0.9rem 0 0;
   font-weight: 600;
   min-height: 1.2em;
   overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 
 .dica {
-  font-size: 0.75rem;
-  color: #64748b;
-  margin: 0;
+  margin: 0.9rem 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
 }
 
 @media (max-width: 480px) {
   .topo {
-    flex-direction: column;
-    align-items: flex-start;
+    padding: 1rem;
   }
 
-  .cartao {
-    padding: 1rem;
+  .lancamento {
+    gap: 0.75rem;
+  }
+
+  .codigo {
+    width: 2.2rem;
   }
 }
