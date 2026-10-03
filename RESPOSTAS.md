@@ -404,3 +404,100 @@ já não vale nessa posição). Como nem `V1 <= V2` nem `V2 <= V1` é verdade em
 todas as posições simultaneamente, nenhum dos dois domina o outro - não há
 como um ter influenciado o outro causalmente, então são concorrentes por
 definição.
+
+---
+
+## Parte C - Publish/Subscribe entre agências (Seção 7)
+
+### Decisões de design
+
+A chamada REST direta `/contas/{id}/creditar-remoto` do Sprint 1 foi
+**removida** - não há mais nenhuma rota HTTP equivalente. O crédito remoto
+chega exclusivamente via mensageria: `transferenciasController.transferir`
+publica na exchange `iceibank.eventos` (routing key `agencia.<id>.creditar`)
+e cada agência consome sua própria fila (`fila-agencia-<id>`) numa thread
+dedicada, iniciada junto com o servidor HTTP em `app.py`
+(`mensageria.assinar`).
+
+Como consequência, o **service token** do Sprint 1 (usado para proteger a
+chamada agência-a-agência) também deixou de fazer sentido e foi removido
+(`exigir_token_de_servico`, `SERVICE_TOKEN`) - não existe mais nenhuma
+chamada HTTP entre agências para proteger. A proteção que existia nesse
+nível simplesmente não tem mais onde se aplicar; a pergunta 3 abaixo discute
+o que isso implica para a segurança do novo mecanismo.
+
+Para manter os testes rápidos e sem depender de infraestrutura externa, a
+função `criar_app()` ganhou um parâmetro `iniciar_consumidor` (default
+`True`): os testes de controller usam `False` e simulam a entrega da
+mensagem diretamente (chamando a função de processamento exposta em
+`app.state.processar_credito_recebido`), enquanto um arquivo separado
+(`tests/test_mensageria.py`) valida `publicar()`/`assinar()` de ponta a
+ponta contra um broker RabbitMQ real (pulado automaticamente se
+`RABBITMQ_URL` não estiver definida).
+
+### Evidência do teste de resiliência (executado de verdade)
+
+Com a Agência 1 derrubada (processo encerrado) depois de já ter criado a
+conta 1 e já ter consumido um primeiro crédito (saldo 30), uma segunda
+transferência para ela ainda retornou **200 OK** (mensagem publicada
+normalmente - a fila `fila-agencia-1`, já existente de quando a agência
+rodou antes, reteve a mensagem). Ao subir a Agência 1 de novo, o log gerado
+foi:
+
+```
+CRIAR_CONTA            {id: 1, saldoInicial: 0}
+TRANSFERENCIA_CREDITO_REMOTO  {idConta: 1, valor: 30}   <- aplicado antes da queda
+CREDITO_REMOTO_FALHOU  {idConta: 1, valor: 20, motivo: "conta nao encontrada"}  <- apos reiniciar
+```
+
+### Perguntas (Seção 7.5)
+
+**1. O que aconteceu exatamente quando a Agência 1 voltou? A mensagem foi aplicada? Por quê?**
+
+A mensagem **não foi perdida** - ela chegou e foi processada (o log mostra
+isso explicitamente, com `CREDITO_REMOTO_FALHOU`), mas o crédito **não foi
+aplicado**, porque a conta 1 não existia mais: as contas vivem só em memória
+(um `dict` dentro do processo), e reiniciar o processo apaga esse estado por
+completo. A mensagem sobreviveu à queda da agência graças à fila *durable*
+do RabbitMQ; o que não sobreviveu foi o estado da aplicação que deveria
+recebê-la. São dois problemas de durabilidade completamente diferentes, e a
+mensageria só resolve um dos dois.
+
+**2. Compare com o Sprint 1: o que melhorou, e o que continua em aberto?**
+
+Melhorou a **durabilidade da comunicação**: no Sprint 1, se a agência de
+destino estivesse fora do ar no exato momento da chamada REST, a mensagem
+simplesmente nunca existia - era uma falha de rede imediata, sem nenhum
+registro de intenção em lugar nenhum além do log de erro da origem. Agora, a
+intenção ("creditar a conta X em Y") fica registrada de forma durável no
+broker até alguém processá-la, mesmo que ninguém esteja ouvindo no momento
+exato da publicação.
+
+O que continua em aberto é a **consistência do estado da aplicação**: "a
+mensagem não se perde" é uma garantia sobre o transporte, não sobre o
+sistema como um todo. Se o estado que a mensagem precisa encontrar (a conta)
+também não for durável, a entrega da mensagem deixa de ser suficiente - o
+problema só migra de "a chamada falhou" (Sprint 1) para "a mensagem chegou,
+mas não encontrou onde aplicar o valor" (Sprint 2). Resolver isso de verdade
+exigiria persistência das contas em disco/banco, o que também está fora do
+escopo deste sprint.
+
+**3. O consumidor de mensagens não passa por nenhuma verificação de JWT. Isso é um problema de segurança?**
+
+Sim, é um problema de segurança real, não hipotético. No ambiente de
+desenvolvimento deste sprint, qualquer processo com acesso à
+`RABBITMQ_URL` (que é só uma variável de ambiente, sem controle de acesso
+por routing key) consegue publicar uma mensagem na exchange
+`iceibank.eventos` com qualquer routing key `agencia.<id>.creditar` e
+qualquer payload - e o consumidor aplica o crédito sem checar quem publicou
+nem se a origem alegada (`origemAgencia`) é verdadeira. Isso é
+qualitativamente diferente do Sprint 1: lá, pelo menos a rota REST exigia um
+token (ainda que fosse só um segredo compartilhado fixo); aqui, não existe
+nenhuma verificação equivalente no caminho da mensageria.
+
+Em produção isso seria mitigado por controle de acesso no próprio broker
+(usuários/permissões por vhost ou por exchange no RabbitMQ, TLS mútuo,
+credenciais por agência em vez de uma única `RABBITMQ_URL` compartilhada) -
+nada disso foi implementado aqui porque está fora do escopo do roteiro deste
+sprint, mas é uma lacuna real que eu identifico conscientemente, não um
+descuido que passou despercebido.

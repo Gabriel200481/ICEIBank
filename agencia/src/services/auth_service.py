@@ -14,11 +14,6 @@ SECRET_KEY = os.environ.get("JWT_SECRET", "chave-secreta-de-desenvolvimento-icei
 ALGORITHM = "HS256"
 EXPIRACAO_MINUTOS = int(os.environ.get("JWT_EXPIRACAO_MINUTOS", "15"))
 
-# Segredo compartilhado entre as 3 agencias para a chamada interna
-# creditar-remoto (Parte D) - distinto do JWT de usuario. Justificativa em
-# RESPOSTAS.md (secao 11).
-SERVICE_TOKEN = os.environ.get("AGENCIA_SERVICE_TOKEN", "segredo-compartilhado-entre-agencias-iceibank")
-
 
 def criar_token(usuario: str) -> str:
     agora = datetime.now(timezone.utc)

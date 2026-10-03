@@ -7,7 +7,7 @@ from src.services import auth_service
 
 @pytest.fixture
 def cliente(tmp_path):
-    app = criar_app(id_agencia=0)
+    app = criar_app(id_agencia=0, iniciar_consumidor=False)
     # isola os logs de teste do diretorio real agencia/data
     app.state.registro.caminho_arquivo = tmp_path / "eventos-teste.jsonl"
     cliente = TestClient(app)
