@@ -1,6 +1,6 @@
 # Evidências - Sprint 2
 
-Prints reais, com `Get-Date` (ou equivalente) visível em algum terminal, provando execução recente.
+Prints reais, com `Get-Date` (ou equivalente) visível em algum terminal, provando execução recente. Comandos prontos e já validados em [COMO-CAPTURAR-EVIDENCIAS.md](COMO-CAPTURAR-EVIDENCIAS.md).
 
 - `transferencia-assincrona.png` - uma transferência entre agências completando via mensageria, com o log das duas agências visível (Parte C)
 - `resiliencia-fila.png` - agência de destino derrubada, transferência publicada mesmo assim, e o que acontece quando ela volta (Parte C)
