@@ -501,3 +501,80 @@ credenciais por agência em vez de uma única `RABBITMQ_URL` compartilhada) -
 nada disso foi implementado aqui porque está fora do escopo do roteiro deste
 sprint, mas é uma lacuna real que eu identifico conscientemente, não um
 descuido que passou despercebido.
+
+---
+
+## Parte D - Linha do tempo causal (Seção 8)
+
+### Evidência (execução real)
+
+Com as 3 agências rodando, criei uma conta em cada uma **quase ao mesmo
+tempo** (3 chamadas disparadas em paralelo, sem nenhuma relação entre elas)
+e, em seguida, fiz uma transferência real entre a Agência 0 e a Agência 1.
+Saída real do `mesclar_logs.py`:
+
+```
+=== Linha do tempo (ordenada por hora de parede) ===
+[agencia-0] vetor=[1, 0, 0] CRIAR_CONTA {id: 0, ...}
+[agencia-1] vetor=[0, 1, 0] CRIAR_CONTA {id: 1, ...}
+[agencia-2] vetor=[0, 0, 1] CRIAR_CONTA {id: 2, ...}
+[agencia-0] vetor=[2, 0, 0] TRANSFERENCIA_DEBITO {idOrigem: 0, idDestino: 1, valor: 30}
+[agencia-1] vetor=[3, 2, 0] TRANSFERENCIA_CREDITO_REMOTO {idConta: 1, valor: 30, origemAgencia: 0}
+
+=== Pares de eventos CONCORRENTES entre agencias diferentes ===
+[agencia-0] CRIAR_CONTA ([1,0,0])  x  [agencia-1] CRIAR_CONTA ([0,1,0])
+[agencia-0] CRIAR_CONTA ([1,0,0])  x  [agencia-2] CRIAR_CONTA ([0,0,1])
+[agencia-1] CRIAR_CONTA ([0,1,0])  x  [agencia-2] CRIAR_CONTA ([0,0,1])
+[agencia-1] CRIAR_CONTA ([0,1,0])  x  [agencia-0] TRANSFERENCIA_DEBITO ([2,0,0])
+[agencia-2] CRIAR_CONTA ([0,0,1])  x  [agencia-0] TRANSFERENCIA_DEBITO ([2,0,0])
+[agencia-2] CRIAR_CONTA ([0,0,1])  x  [agencia-1] TRANSFERENCIA_CREDITO_REMOTO ([3,2,0])
+```
+
+Os 3 `CRIAR_CONTA` (uma por agência, sem relação entre si) apareceram
+corretamente como concorrentes **dois a dois**. O par
+`TRANSFERENCIA_DEBITO`/`TRANSFERENCIA_CREDITO_REMOTO` - que tem relação
+causal real, o crédito só existe porque o débito aconteceu - **não**
+apareceu na lista de concorrentes, exatamente como esperado: `[2,0,0] <=
+[3,2,0]` em toda posição, então o script classifica como `ANTES`, não
+`CONCORRENTES`.
+
+### Perguntas (Seção 8.3)
+
+**1. O que, no relógio vetorial, torna essa comparação confiável (o Lamport do Sprint 1 não permitia)?**
+
+O relógio de Lamport colapsa toda a história causal de um processo num
+único número - dois eventos com timestamps diferentes podem ter qualquer
+relação (causal ou não), porque o número sozinho não guarda *de onde* veio
+cada incremento. O vetor, em vez disso, guarda o progresso de **cada**
+processo separadamente: a posição `i` do vetor é, literalmente, "quantos
+eventos da Agência `i` eu já presenciei (diretamente ou por tabela
+repassada numa mensagem)". Por isso dá para comparar posição a posição e
+provar causalidade (ou a ausência dela) com certeza, em vez de só inferir a
+partir de uma ordem total artificial.
+
+**2. Encontre um par concorrente real no seu teste - faz sentido eles não terem relação causal?**
+
+Sim. O par `[agencia-1] CRIAR_CONTA ([0,1,0])` x `[agencia-2] CRIAR_CONTA
+([0,0,1])` faz todo sentido como concorrente: são duas chamadas HTTP
+completamente independentes, disparadas em paralelo contra agências
+diferentes, sem nenhuma mensagem trocada entre a Agência 1 e a Agência 2 em
+momento nenhum desse teste. Nenhum vetor "sabe" da existência do outro -
+`[0,1,0]` não domina `[0,0,1]` (a posição 2 de um é maior que a do outro, e
+vice-versa na posição 1) -, então a classificação como concorrente é
+exatamente o que se espera fisicamente do cenário.
+
+**3. O algoritmo é O(n²) - seria um problema em escala? O que se poderia fazer?**
+
+Para o volume deste projeto (algumas dezenas de eventos por execução de
+teste), O(n²) é irrelevante - a comparação roda em milissegundos. Em um
+sistema real com milhões de eventos, comparar todos os pares se tornaria
+inviável (um milhão de eventos já são ~5×10¹¹ comparações). Algumas
+direções possíveis para tornar isso escalável: (a) restringir a comparação
+a janelas de tempo (só comparar eventos próximos no tempo de parede,
+assumindo que eventos muito distantes raramente são o par concorrente que
+interessa observar), (b) indexar eventos por posição do vetor e usar
+estruturas específicas para consulta de dominância parcial em vez de força
+bruta, ou (c) processar isso de forma incremental/streaming conforme os
+eventos chegam, em vez de recarregar e comparar tudo do zero a cada
+execução - cada evento novo só precisaria ser comparado contra os eventos
+"recentes" ainda relevantes, não contra todo o histórico.
