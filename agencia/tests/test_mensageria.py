@@ -26,7 +26,7 @@ def _declarar_fila_sem_consumir(id_agencia: int) -> None:
     esse estado (fila existe, ninguem consumindo) que faz uma mensagem
     publicada "sobreviver" ate alguem voltar a consumir.
     """
-    conexao = pika.BlockingConnection(pika.URLParameters(mensageria._url()))
+    conexao = pika.BlockingConnection(pika.URLParameters(mensageria.url_rabbitmq()))
     canal = conexao.channel()
     canal.exchange_declare(exchange=mensageria.EXCHANGE, exchange_type="topic", durable=True)
     nome_fila = f"fila-agencia-{id_agencia}"
