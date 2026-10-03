@@ -25,7 +25,7 @@
 | Sprint | Unidade da ementa       | Tecnologia         | Conceito de Sistemas Distribuídos | Status         |
 | ------ | ------------------------ | ------------------- | ----------------------------------- | -------------- |
 | 1      | U2 - Desenvolvimento Web | API REST / MVC       | Relógio lógico de Lamport         | Concluída |
-| 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Não iniciada |
+| 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Em andamento |
 | 3      | U4 - Desenvolvimento Móvel | App Flutter          | Consenso (eleição de líder)        | Não iniciada |
 | 4      | U5 - Computação em Nuvem | Containers            | Transações distribuídas (2PC/Saga) | Não iniciada |
 
@@ -159,7 +159,21 @@ JWT_SECRET=troque-por-um-segredo-forte-em-producao
 JWT_EXPIRACAO_MINUTOS=15
 AGENCIA_SERVICE_TOKEN=segredo-compartilhado-entre-agencias
 OFFSET=0
+
+# Sprint 2 - obrigatoria (nao ha valor padrao, a app nao sobe sem ela)
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 ```
+
+### RabbitMQ (Sprint 2)
+
+Duas opções, mesma variável `RABBITMQ_URL`:
+
+- **CloudAMQP (gerenciado, como o roteiro recomenda):** crie uma instância gratuita "Little Lemur" em [cloudamqp.com](https://www.cloudamqp.com/), copie o campo **AMQP URL** (formato `amqps://usuario:senha@host.cloudamqp.com/vhost`) e use como `RABBITMQ_URL`.
+- **Docker local (alternativa, usada durante o desenvolvimento deste sprint):**
+  ```powershell
+  docker run -d --name rabbitmq-iceibank -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+  ```
+  Painel de administração em `http://localhost:15672` (usuário/senha padrão: `guest`/`guest`). `RABBITMQ_URL=amqp://guest:guest@localhost:5672/`.
 
 ### Back-end - subindo as 3 agências
 
