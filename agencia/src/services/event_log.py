@@ -1,8 +1,8 @@
 """Registro de eventos de uma agencia em um arquivo .jsonl (append-only).
 
-Cada linha e um evento JSON com o timestamp logico (Lamport) e o timestamp
-de parede (relogio fisico da maquina, so para comparacao - nao usado em
-nenhuma decisao do sistema).
+Cada linha e um evento JSON com o timestamp vetorial (Sprint 2 - substitui
+o timestamp de Lamport do Sprint 1) e o timestamp de parede (relogio fisico
+da maquina, so para comparacao - nao usado em nenhuma decisao do sistema).
 """
 
 import json
@@ -18,11 +18,11 @@ class RegistroEventos:
         base.mkdir(parents=True, exist_ok=True)
         self.caminho_arquivo = base / f"eventos-{nome_agencia}.jsonl"
 
-    def registrar(self, tipo: str, timestamp_lamport: int, detalhes: dict[str, Any]) -> dict[str, Any]:
+    def registrar(self, tipo: str, timestamp_vetorial: list[int], detalhes: dict[str, Any]) -> dict[str, Any]:
         evento = {
             "agencia": self.nome_agencia,
             "tipo": tipo,
-            "timestampLamport": timestamp_lamport,
+            "timestampVetorial": timestamp_vetorial,
             "horaParede": datetime.now(timezone.utc).isoformat(),
             "detalhes": detalhes,
         }
@@ -30,5 +30,5 @@ class RegistroEventos:
         # (no Windows isso geraria "\r\r\n" e linhas em branco no .jsonl).
         with open(self.caminho_arquivo, "a", encoding="utf-8", newline="") as arquivo:
             arquivo.write(json.dumps(evento, ensure_ascii=False) + "\n")
-        print(f"[Lamport {timestamp_lamport}] {tipo} {detalhes}")
+        print(f"[Vetor {timestamp_vetorial}] {tipo} {detalhes}")
         return evento

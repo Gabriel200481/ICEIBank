@@ -13,6 +13,6 @@ def status(request: Request):
     estado = request.app.state
     return {
         "idAgencia": estado.id_agencia,
-        "timestampLamportAtual": estado.relogio.contador,
+        "timestampVetorialAtual": estado.relogio.vetor,
         "quantidadeContas": len(estado.contas),
     }

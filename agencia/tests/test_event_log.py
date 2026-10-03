@@ -6,11 +6,11 @@ from src.services.event_log import RegistroEventos
 def test_registrar_grava_linha_jsonl_valida(tmp_path):
     registro = RegistroEventos("agencia-teste", pasta_dados=str(tmp_path))
 
-    evento = registro.registrar("CRIAR_CONTA", 1, {"id": 0, "nomeAluno": "Ana"})
+    evento = registro.registrar("CRIAR_CONTA", [1, 0, 0], {"id": 0, "nomeAluno": "Ana"})
 
     assert evento["agencia"] == "agencia-teste"
     assert evento["tipo"] == "CRIAR_CONTA"
-    assert evento["timestampLamport"] == 1
+    assert evento["timestampVetorial"] == [1, 0, 0]
     assert "horaParede" in evento
 
     caminho = tmp_path / "eventos-agencia-teste.jsonl"
@@ -22,8 +22,8 @@ def test_registrar_grava_linha_jsonl_valida(tmp_path):
 
 def test_registrar_multiplos_eventos_faz_append(tmp_path):
     registro = RegistroEventos("agencia-teste", pasta_dados=str(tmp_path))
-    registro.registrar("CRIAR_CONTA", 1, {"id": 0})
-    registro.registrar("DEPOSITO", 2, {"id": 0, "valor": 50})
+    registro.registrar("CRIAR_CONTA", [1, 0, 0], {"id": 0})
+    registro.registrar("DEPOSITO", [2, 0, 0], {"id": 0, "valor": 50})
 
     caminho = tmp_path / "eventos-agencia-teste.jsonl"
     linhas = caminho.read_text(encoding="utf-8").strip().splitlines()

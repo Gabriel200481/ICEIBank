@@ -20,12 +20,12 @@ def test_status_nao_exige_autenticacao(cliente):
     assert resposta.status_code == 200
 
 
-def test_status_reporta_id_agencia_e_contador_zerado_sem_contas(cliente):
+def test_status_reporta_id_agencia_e_vetor_zerado_sem_contas(cliente):
     resposta = cliente.get("/status")
     corpo = resposta.json()
     assert corpo["idAgencia"] == 1
     assert corpo["quantidadeContas"] == 0
-    assert corpo["timestampLamportAtual"] == 0
+    assert corpo["timestampVetorialAtual"] == [0, 0, 0]
 
 
 def test_status_reflete_contas_criadas_e_relogio_atualizado(cliente):
@@ -35,4 +35,4 @@ def test_status_reflete_contas_criadas_e_relogio_atualizado(cliente):
     resposta = cliente.get("/status")
     corpo = resposta.json()
     assert corpo["quantidadeContas"] == 2
-    assert corpo["timestampLamportAtual"] == 2
+    assert corpo["timestampVetorialAtual"] == [0, 2, 0]

@@ -325,3 +325,82 @@ informação sensível é baixo.
 contador de Lamport e quantidade de contas em 0 antes de qualquer operação;
 após criar 2 contas, `/status` passou a reportar `timestampLamportAtual: 2` e
 `quantidadeContas: 2`, chamando a rota sem nenhum header de autenticação.
+
+---
+
+# RESPOSTAS - Sprint 2 (ICEIBank)
+
+A declaração de uso de IA feita no Sprint 1 continua valendo integralmente
+para este sprint - mesma ferramenta (Claude Code), mesmo nível de uso
+extensivo sob minha supervisão e revisão, mesma responsabilidade assumida de
+entender e defender qualquer trecho entregue.
+
+## Escolha de linguagem (Seção 2.2)
+
+Mantida a mesma do Sprint 1: **Python 3.13 + FastAPI + Uvicorn**, conforme
+exigido (a entrega evolui o mesmo código, não recomeça do zero).
+
+## RabbitMQ local vs. CloudAMQP
+
+O roteiro recomenda CloudAMQP (gerenciado). Durante o desenvolvimento deste
+sprint usei um RabbitMQ local via Docker (`rabbitmq:3-management`) - a
+própria seção 4.1 do roteiro cita essa alternativa para quem não tem
+internet confiável durante a aula. A aplicação não faz nenhuma distinção
+entre as duas: tudo depende só do valor de `RABBITMQ_URL`, então trocar para
+uma instância CloudAMQP real é só redefinir essa variável de ambiente, sem
+mudar nenhuma linha de código.
+
+## Parte B - Relógio vetorial (Seção 6)
+
+### Decisão de design
+
+O roteiro permite apagar `lamport_clock.py` ou mantê-lo para consulta -
+optei por **apagar** (junto com seu teste), já que o Sprint 2 substitui
+completamente o relógio de Lamport pelo vetorial em todos os pontos onde ele
+era usado (controllers, event log, rota de status). Manter um arquivo morto,
+sem nenhum import apontando pra ele, só adicionaria confusão sobre qual
+relógio está realmente em uso - o histórico do Git já preserva o código do
+Sprint 1 para quem quiser consultar.
+
+`RelogioVetorial` mantém os mesmos nomes de método do `RelogioLamport`
+(`evento_local`, `ao_enviar`, `ao_receber`) de propósito: os controllers de
+contas e transferências do Sprint 1 não precisaram de nenhuma alteração para
+passar a usar o vetor - só a instanciação em `app.py` mudou. Os pontos que
+dependiam do formato antigo (um único inteiro) - o payload do
+`creditar-remoto` e a rota `/status` - foram atualizados para carregar o
+vetor completo (`timestampVetorial` em vez de `timestampLamport`,
+`timestampVetorialAtual` em vez de `timestampLamportAtual`).
+
+### Perguntas (Seção 6.4)
+
+**1. Com 3 agências o vetor tem 3 posições. Se o sistema crescesse para 10 agências, o que aconteceria com o tamanho de cada vetor anexado a cada mensagem? Isso é um problema?**
+
+O vetor cresceria para 10 posições, e esse tamanho é anexado a **toda**
+mensagem publicada e a **todo** evento gravado no log - o overhead cresce
+linearmente com o número de processos (agências) no sistema, não com o
+número de eventos. Para o ICEIBank, com um número pequeno e fixo de
+agências, isso não é um problema real: 10 inteiros a mais por mensagem é
+desprezível perto do resto do payload (JSON, cabeçalhos HTTP/AMQP). Vira um
+problema de verdade em sistemas com milhares de processos (ex.: um cluster
+grande, ou dispositivos móveis entrando e saindo constantemente) - cada
+mensagem carregaria milhares de inteiros só de metadado de causalidade. É
+exatamente essa limitação de escala que motiva variantes mais compactas
+(relógios de matriz, "vector clocks" podados, ou abordagens baseadas em
+versão/intervalo) em sistemas distribuídos de grande porte - fora do escopo
+deste sprint, mas é a direção natural do problema.
+
+**2. Dado V1 = [3, 1, 0] e V2 = [3, 2, 0]: qual evento aconteceu primeiro, ou eles são concorrentes?**
+
+`V1` aconteceu **antes** de `V2`. Comparando posição a posição: `3<=3`,
+`1<=2`, `0<=0` - `V1` é menor ou igual a `V2` em todas as posições (e são
+diferentes), então `V1 <= V2` vale integralmente, o que caracteriza a
+relação "aconteceu-antes".
+
+**3. Dado V1 = [3, 1, 0] e V2 = [1, 3, 0]: qual evento aconteceu primeiro, ou eles são concorrentes?**
+
+São **concorrentes**. Na posição 0, `V1[0]=3 > V2[0]=1` (então `V2 <= V1` já
+não vale nessa posição); na posição 1, `V1[1]=1 < V2[1]=3` (então `V1 <= V2`
+já não vale nessa posição). Como nem `V1 <= V2` nem `V2 <= V1` é verdade em
+todas as posições simultaneamente, nenhum dos dois domina o outro - não há
+como um ter influenciado o outro causalmente, então são concorrentes por
+definição.

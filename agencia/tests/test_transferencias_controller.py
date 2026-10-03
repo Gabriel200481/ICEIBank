@@ -70,8 +70,11 @@ def test_transferencia_entre_agencias_sucesso(tmp_path, monkeypatch):
     assert cliente_origem.get("/contas/0").json()["saldo"] == 60
     assert cliente_destino.get("/contas/1").json()["saldo"] == 40
 
-    # regra 3 de Lamport: quem recebe ajusta para max(local, recebido) + 1
-    assert app_destino.state.relogio.contador > app_origem.state.relogio.contador - 1
+    assert app_origem.state.relogio.vetor == [3, 0, 0]
+    assert app_destino.state.relogio.vetor == [3, 2, 0]
+    # regra 3 do relogio vetorial: quem recebe domina quem enviou em toda
+    # posicao (relacao causal real, nao so timestamps diferentes).
+    assert all(app_origem.state.relogio.vetor[i] <= app_destino.state.relogio.vetor[i] for i in range(3))
 
 
 def test_transferencia_entre_agencias_falha_agencia_fora_do_ar(tmp_path, monkeypatch):
@@ -94,19 +97,19 @@ def test_transferencia_entre_agencias_falha_agencia_fora_do_ar(tmp_path, monkeyp
     assert len(tipos) == 1
 
 
-def test_creditar_remoto_usa_ao_receber_do_relogio_de_lamport(tmp_path):
+def test_creditar_remoto_usa_ao_receber_do_relogio_vetorial(tmp_path):
     app_destino, cliente_destino = _criar_cliente(tmp_path, id_agencia=1)
     cliente_destino.post("/contas", json={"id": 1, "nomeAluno": "Bia", "saldoInicial": 0})
 
-    app_destino.state.relogio.contador = 10  # agencia de destino "adiantada"
+    app_destino.state.relogio.vetor = [10, 5, 0]  # agencia de destino "adiantada"
 
     resposta = cliente_destino.post(
         "/contas/1/creditar-remoto",
-        json={"valor": 50, "timestampLamport": 3, "origemAgencia": 0},
+        json={"valor": 50, "timestampVetorial": [3, 0, 0], "origemAgencia": 0},
         headers={"Authorization": f"Service {auth_service.SERVICE_TOKEN}"},
     )
 
     assert resposta.status_code == 200
     assert resposta.json()["saldoAtual"] == 50
-    # max(10, 3) + 1 = 11
-    assert app_destino.state.relogio.contador == 11
+    # max([10,5,0], [3,0,0]) = [10,5,0], depois incrementa a propria posicao (1) -> [10,6,0]
+    assert app_destino.state.relogio.vetor == [10, 6, 0]

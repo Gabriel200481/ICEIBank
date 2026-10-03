@@ -17,7 +17,7 @@ class TransferenciaBody(BaseModel):
 
 class CreditoRemotoBody(BaseModel):
     valor: float
-    timestampLamport: int
+    timestampVetorial: list[int]
     origemAgencia: int
 
 
@@ -65,7 +65,7 @@ def transferir(body: TransferenciaBody, request: Request):
     try:
         resposta = httpx.post(
             f"{url_destino}/contas/{body.idDestino}/creditar-remoto",
-            json={"valor": body.valor, "timestampLamport": ts_envio, "origemAgencia": estado.id_agencia},
+            json={"valor": body.valor, "timestampVetorial": ts_envio, "origemAgencia": estado.id_agencia},
             headers={"Authorization": f"Service {auth_service.SERVICE_TOKEN}"},
             timeout=5.0,
         )
@@ -92,9 +92,9 @@ def transferir(body: TransferenciaBody, request: Request):
 def creditar_remoto(id_conta: int, body: CreditoRemotoBody, request: Request):
     estado = request.app.state
 
-    # Ao RECEBER uma mensagem de outra agencia, o relogio de Lamport e
-    # atualizado com base no timestamp recebido - regra 3 do algoritmo.
-    ts = estado.relogio.ao_receber(body.timestampLamport)
+    # Ao RECEBER uma mensagem de outra agencia, o relogio vetorial e
+    # atualizado com base no vetor recebido - regra 3 do algoritmo.
+    ts = estado.relogio.ao_receber(body.timestampVetorial)
 
     conta = estado.contas.get(id_conta)
     if not conta:
