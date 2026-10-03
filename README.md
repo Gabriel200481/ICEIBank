@@ -19,13 +19,14 @@
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![Uvicorn](https://img.shields.io/badge/Uvicorn-ASGI-333333?style=for-the-badge&logo=gunicorn&logoColor=white)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Pub%2FSub-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)
 ![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 ![Pytest](https://img.shields.io/badge/Pytest-testado-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)
 
 | Sprint | Unidade da ementa       | Tecnologia         | Conceito de Sistemas Distribuídos | Status         |
 | ------ | ------------------------ | ------------------- | ----------------------------------- | -------------- |
 | 1      | U2 - Desenvolvimento Web | API REST / MVC       | Relógio lógico de Lamport         | Concluída |
-| 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Em andamento |
+| 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Código completo — [evidências de terminal pendentes](evidencias/sprint2/COMO-CAPTURAR-EVIDENCIAS.md) |
 | 3      | U4 - Desenvolvimento Móvel | App Flutter          | Consenso (eleição de líder)        | Não iniciada |
 | 4      | U5 - Computação em Nuvem | Containers            | Transações distribuídas (2PC/Saga) | Não iniciada |
 
@@ -43,6 +44,19 @@
 - [x] `RESPOSTAS.md` completo (todas as perguntas + justificativas de design)
 - [x] `evidencias/sprint1/` completa (11 prints: frontend + terminal, todos reais)
 - [x] [Vídeo de apresentação](evidencias/sprint1/apresentacao-sprint1.mp4)
+
+**Sprint 2 - checklist de entrega** (seção 10 do roteiro):
+
+- [x] RabbitMQ configurado (exchange topic `iceibank.eventos`, fila por agência, routing keys corretas)
+- [x] Relógio vetorial substituindo o relógio de Lamport, 3 regras implementadas
+- [x] Transferência entre agências via mensageria assíncrona (REST direto removido)
+- [x] Teste de resiliência reproduzido e documentado (agência derrubada, mensagem retida, conta perdida ao reiniciar)
+- [x] `mesclar_logs.py` identificando corretamente pares concorrentes
+- [x] JWT e frontend do Sprint 1 continuam funcionando (regressão testada em navegador real)
+- [x] Funcionalidade adicional (fila de auditoria com routing key coringa) implementada e documentada
+- [x] `RESPOSTAS.md` atualizado (seções 6.4, 7.5, 8.3 + funcionalidade adicional)
+- [x] Suite de testes automatizados rodando limpa (57 testes, incluindo integração real contra RabbitMQ)
+- [ ] `evidencias/sprint2/` completa — guia em [evidencias/sprint2/COMO-CAPTURAR-EVIDENCIAS.md](evidencias/sprint2/COMO-CAPTURAR-EVIDENCIAS.md)
 
 ---
 
@@ -74,22 +88,26 @@
 
 ## Sobre o Projeto
 
-O ICEIBank é um banco fictício particionado em agências independentes: cada conta pertence a exatamente uma agência (`id_conta % numero_de_agencias`), sem replicação. Neste sprint, três agências rodam simultaneamente (mesmo código-fonte, identidades diferentes via variável de ambiente), cada uma com sua própria API REST/MVC para criar contas, consultar saldo, depositar, sacar e transferir - local ou entre agências.
+O ICEIBank é um banco fictício particionado em agências independentes: cada conta pertence a exatamente uma agência (`id_conta % numero_de_agencias`), sem replicação. Três agências rodam simultaneamente (mesmo código-fonte, identidades diferentes via variável de ambiente), cada uma com sua própria API REST/MVC para criar contas, consultar saldo, depositar, sacar e transferir - local ou entre agências.
 
-Toda operação é registrada com um timestamp de relógio lógico de Lamport, e um script auxiliar (`mesclar_logs.py`) mescla os logs das três agências em uma linha do tempo única, permitindo observar o algoritmo de Lamport funcionando de verdade sobre operações concorrentes.
+Toda operação é registrada com um **relógio vetorial** (Sprint 2 - substitui o relógio de Lamport do Sprint 1, que só garantia uma direção da causalidade), e um script auxiliar (`mesclar_logs.py`) mescla os logs das três agências e identifica, com certeza matemática, quais pares de eventos são causalmente relacionados e quais são genuinamente concorrentes.
 
-Este sprint também exige autenticação via JWT protegendo a API e um frontend web que a consome.
+Transferências entre agências não usam mais chamada REST direta: a agência de origem publica um evento numa exchange do **RabbitMQ**, e a agência de destino consome quando puder - mesmo que esteja fora do ar no momento da publicação, a mensagem fica retida numa fila durável até ser processada.
+
+O projeto também tem autenticação via JWT protegendo a API e um frontend web que a consome.
 
 ---
 
 ## Funcionalidades Principais
 
 - **Particionamento de contas:** cada agência só opera contas sob sua responsabilidade (`id_conta % 3`).
-- **CRUD de contas + depósito/saque:** cada operação carimbada com relógio lógico de Lamport.
+- **CRUD de contas + depósito/saque:** cada operação carimbada com relógio vetorial.
 - **Transferência local:** entre contas da mesma agência.
-- **Transferência entre agências:** chamada REST direta agência-a-agência, usando as regras `ao_enviar()`/`ao_receber()` do relógio de Lamport.
-- **Falha conhecida (proposital):** se a agência de destino cair no meio de uma transferência entre agências, o débito não é revertido - a inconsistência é registrada no log (será resolvida no Sprint 4, com 2PC/Saga).
-- **Linha do tempo unificada:** script que mescla os `.jsonl` das três agências, ordenados por relógio de Lamport.
+- **Transferência entre agências (Sprint 2):** publish/subscribe via RabbitMQ - a origem publica, a agência de destino consome de forma assíncrona (entrega sobrevive à queda temporária do destino).
+- **Relógio vetorial:** substitui o relógio de Lamport do Sprint 1 - permite provar com certeza se dois eventos são causalmente relacionados ou concorrentes.
+- **Limitação conhecida (proposital):** as contas vivem em memória; se a agência de destino reiniciar antes de consumir uma mensagem pendente, o crédito não encontra a conta (registrado como `CREDITO_REMOTO_FALHOU`, nunca aplicado silenciosamente - ver teste de resiliência em RESPOSTAS.md).
+- **Linha do tempo causal:** script que mescla os `.jsonl` das três agências e aponta pares de eventos comprovadamente concorrentes, comparando vetores.
+- **Fila de auditoria:** consumidor extra com routing key coringa (`agencia.*.creditar`) que escuta todo crédito de qualquer agência, independente do processamento normal.
 - **Autenticação JWT:** login com expiração de token, protegendo todas as rotas de contas.
 - **Frontend web:** login, saldo, depósito, saque e transferência, consumindo a API autenticada.
 - **Funcionalidade adicional:** ver [RESPOSTAS.md](RESPOSTAS.md).
@@ -106,8 +124,15 @@ Este sprint também exige autenticação via JWT protegendo a API e um frontend 
 | FastAPI     | 0.115   | Framework web (REST/MVC via `APIRouter`)          |
 | Uvicorn     | 0.30    | Servidor ASGI                                      |
 | PyJWT       | 2.9     | Emissão e validação de tokens JWT                |
-| httpx       | 0.27    | Chamadas REST entre agências (transferência remota) |
+| httpx       | 0.27    | Testes de API (TestClient)                        |
+| pika        | 1.3     | Cliente RabbitMQ (publish/subscribe - Sprint 2)   |
 | Pytest      | 8.3     | Testes unitários e de integração                  |
+
+### Infraestrutura
+
+| Tecnologia | Uso                                                              |
+| ----------- | ------------------------------------------------------------------ |
+| RabbitMQ    | Message broker (exchange topic, filas por agência - Sprint 2). CloudAMQP (gerenciado) ou Docker local. |
 
 ### Front-end
 
@@ -233,17 +258,21 @@ iceibank/
 │   │   ├── controllers/
 │   │   │   ├── contas_controller.py
 │   │   │   ├── transferencias_controller.py
-│   │   │   └── auth_controller.py
+│   │   │   ├── auth_controller.py
+│   │   │   └── status_controller.py
 │   │   └── services/
-│   │       ├── lamport_clock.py
+│   │       ├── vector_clock.py      (Sprint 2 - substitui lamport_clock.py)
+│   │       ├── mensageria.py        (Sprint 2 - publish/subscribe via RabbitMQ)
 │   │       ├── event_log.py
 │   │       └── auth_service.py
 │   ├── tests/                      (testes automatizados - pytest)
 │   ├── data/                       (logs gerados em tempo de execução - não versionado)
-│   └── mesclar_logs.py
+│   ├── mesclar_logs.py
+│   └── auditoria.py                 (Sprint 2 - funcionalidade adicional)
 ├── frontend/                       (HTML/CSS/JS puro)
 ├── evidencias/
-│   └── sprint1/
+│   ├── sprint1/
+│   └── sprint2/
 ├── RESPOSTAS.md
 ├── .gitignore
 └── README.md
@@ -253,8 +282,7 @@ iceibank/
 
 ## Demonstração
 
-Fluxo validado de ponta a ponta (backend real + frontend real, ver
-[evidencias/sprint1/](evidencias/sprint1/)):
+### Sprint 1 (ver [evidencias/sprint1/](evidencias/sprint1/))
 
 1. Login em `/auth/login` (tela de login do frontend)
 2. Criar conta 0 na Agência 0 e conta 1 na Agência 1 (trocando o seletor de agência)
@@ -263,16 +291,30 @@ Fluxo validado de ponta a ponta (backend real + frontend real, ver
 5. Transferir da conta 0 (agência 0) para a conta 1 (agência 1) → transferência entre agências, confirmada nos saldos das duas agências
 6. `python mesclar_logs.py` → linha do tempo unificada das 3 agências, ordenada por relógio de Lamport
 
+### Sprint 2 (ver [evidencias/sprint2/](evidencias/sprint2/))
+
+Fluxo validado de ponta a ponta com RabbitMQ real (Docker local):
+
+1. Transferência entre agências → debita na hora, publica na exchange, resposta imediata ("entrega assíncrona")
+2. Agência de destino consome a mensagem (~1s depois) e credita - confirmado pelo saldo e pelo log (`TRANSFERENCIA_CREDITO_REMOTO`)
+3. Teste de resiliência: agência de destino derrubada, nova transferência → ainda 200 OK (mensagem retida na fila); ao reiniciar, a conta não existe mais (estado em memória) e o log registra `CREDITO_REMOTO_FALHOU`, sem aplicar nada silenciosamente
+4. `python mesclar_logs.py` → 3 contas criadas em paralelo em agências diferentes aparecem corretamente como concorrentes entre si; o par débito/crédito de uma transferência real não aparece (relação causal)
+5. `python auditoria.py` rodando em paralelo às agências → captura uma cópia de todo crédito publicado, de qualquer agência, via routing key coringa
+6. JWT e frontend testados novamente em navegador real - sem regressão
+
 ---
 
 ## Testes
 
-Cada peça é testada isoladamente (unitário) antes de ser integrada à API, e a integração é validada com as 3 agências rodando de verdade (requisições HTTP reais via `curl`/`Invoke-RestMethod`, e o frontend dirigido por um navegador real). 48 testes automatizados (pytest) no Sprint 1.
+Cada peça é testada isoladamente (unitário) antes de ser integrada à API, e a integração é validada com as 3 agências rodando de verdade (requisições HTTP reais via `curl`/`Invoke-RestMethod`, e o frontend dirigido por um navegador real). **57 testes automatizados** (pytest) na Sprint 2 - a maioria roda sem precisar de infraestrutura externa (RabbitMQ é simulado via monkeypatch nos testes de controller); um pequeno grupo (`test_mensageria.py`, `test_auditoria.py`) valida publish/subscribe de ponta a ponta contra um broker real, pulado automaticamente se `RABBITMQ_URL` não estiver definida.
 
 ```powershell
 cd agencia
 .venv\Scripts\Activate.ps1
 pytest -v
+
+# para rodar tambem os testes de integracao com RabbitMQ real:
+$env:RABBITMQ_URL="amqp://guest:guest@localhost:5672/"; pytest -v
 ```
 
 ---
@@ -296,7 +338,12 @@ Todo o trabalho é rastreado no [Project do repositório](https://github.com/use
 - Uvicorn: https://www.uvicorn.org/
 - PyJWT: https://pyjwt.readthedocs.io/
 - Pytest: https://docs.pytest.org/
+- RabbitMQ (tutoriais Publish/Subscribe): https://www.rabbitmq.com/tutorials
+- CloudAMQP: https://www.cloudamqp.com/
+- pika: https://pika.readthedocs.io/
 - LAMPORT, Leslie. *Time, Clocks, and the Ordering of Events in a Distributed System*. Communications of the ACM, v. 21, n. 7, 1978.
+- FIDGE, Colin J. *Timestamps in Message-Passing Systems That Preserve the Partial Ordering*. Australian Computer Science Communications, 1988.
+- MATTERN, Friedemann. *Virtual Time and Global States of Distributed Systems*. Parallel and Distributed Algorithms, 1989.
 
 ---
 
