@@ -127,21 +127,32 @@ Frontend (HTML/CSS/JS)
         ▼
 Controllers (APIRouter por contexto: contas, transferencias, auth)
         │
-        ├─ Services (RelogioLamport, RegistroEventos, JWT)
+        ├─ Services (RelogioVetorial, RegistroEventos, Mensageria, JWT)
         │
 Estado em memória (contas: dict, por processo/agência)
         │
 Log de eventos (agencia/data/eventos-agencia-N.jsonl)
 ```
 
-Comunicação entre agências (transferência remota):
+Comunicação entre agências (transferência remota - Sprint 2, via RabbitMQ):
 
 ```
-Agência de origem                         Agência de destino
+Agência de origem                                    Agência de destino
   debita localmente
-  relogio.ao_enviar() ──► POST /contas/{id}/creditar-remoto ──► relogio.ao_receber(ts)
-                                                                  credita localmente
+  relogio.ao_enviar()
+  publicar("agencia.<id>.creditar", msg) ──► iceibank.eventos ──► fila-agencia-<id>
+                                                                       │
+                                                          (consumida quando possível,
+                                                           mesmo que a agência esteja
+                                                           fora do ar no momento do publish)
+                                                                       │
+                                                                       ▼
+                                                        relogio.ao_receber(vetor) + credita
 ```
+
+Até o Sprint 1, essa comunicação era uma chamada REST direta e síncrona
+(`POST /contas/{id}/creditar-remoto`) - se a agência de destino estivesse
+fora do ar, a chamada falhava na hora. Esse endpoint não existe mais.
 
 ---
 
@@ -157,7 +168,6 @@ Agência de origem                         Agência de destino
 ```env
 JWT_SECRET=troque-por-um-segredo-forte-em-producao
 JWT_EXPIRACAO_MINUTOS=15
-AGENCIA_SERVICE_TOKEN=segredo-compartilhado-entre-agencias
 OFFSET=0
 
 # Sprint 2 - obrigatoria (nao ha valor padrao, a app nao sobe sem ela)

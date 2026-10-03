@@ -1,10 +1,9 @@
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from src import config
-from src.controllers.auth_controller import exigir_token_de_servico, exigir_usuario_autenticado
-from src.services import auth_service
+from src.controllers.auth_controller import exigir_usuario_autenticado
+from src.services import mensageria
 
 router = APIRouter()
 
@@ -13,12 +12,6 @@ class TransferenciaBody(BaseModel):
     idOrigem: int
     idDestino: int
     valor: float
-
-
-class CreditoRemotoBody(BaseModel):
-    valor: float
-    timestampVetorial: list[int]
-    origemAgencia: int
 
 
 @router.post("/transferencias", dependencies=[Depends(exigir_usuario_autenticado)])
@@ -58,52 +51,24 @@ def transferir(body: TransferenciaBody, request: Request):
         )
         return {"mensagem": "Transferencia concluida (mesma agencia)."}
 
-    # Caso entre agencias: chama a agencia de destino diretamente via REST.
+    # Caso entre agencias (Sprint 2): em vez de chamar a outra agencia
+    # diretamente via REST (Sprint 1), publica um evento na exchange do
+    # RabbitMQ. A agencia de destino consome quando estiver disponivel -
+    # mesmo que esteja fora do ar agora, a mensagem fica retida na fila
+    # (durable) e e entregue quando ela voltar.
     ts_envio = estado.relogio.ao_enviar()
-    url_destino = config.url_da_agencia(agencia_destino)
-
-    try:
-        resposta = httpx.post(
-            f"{url_destino}/contas/{body.idDestino}/creditar-remoto",
-            json={"valor": body.valor, "timestampVetorial": ts_envio, "origemAgencia": estado.id_agencia},
-            headers={"Authorization": f"Service {auth_service.SERVICE_TOKEN}"},
-            timeout=5.0,
-        )
-        resposta.raise_for_status()
-        return {"mensagem": "Transferencia concluida (entre agencias)."}
-    except httpx.HTTPError as erro:
-        # LIMITACAO CONHECIDA: se esta chamada falhar, o debito ja aplicado
-        # acima NAO e revertido - o dinheiro "desaparece" temporariamente.
-        # Resolver isso de forma correta (atomicidade sob falha) e o assunto
-        # do Sprint 4, com uma transacao distribuida de verdade (2PC/Saga).
-        # Por enquanto, so registramos a inconsistencia no log.
-        estado.registro.registrar(
-            "TRANSFERENCIA_FALHOU",
-            estado.relogio.evento_local(),
-            {"idOrigem": body.idOrigem, "idDestino": body.idDestino, "valor": body.valor, "erro": str(erro)},
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="Falha ao contatar agencia de destino. Debito ja aplicado - inconsistencia conhecida (ver Sprint 4).",
-        )
-
-
-@router.post("/contas/{id_conta}/creditar-remoto", dependencies=[Depends(exigir_token_de_servico)])
-def creditar_remoto(id_conta: int, body: CreditoRemotoBody, request: Request):
-    estado = request.app.state
-
-    # Ao RECEBER uma mensagem de outra agencia, o relogio vetorial e
-    # atualizado com base no vetor recebido - regra 3 do algoritmo.
-    ts = estado.relogio.ao_receber(body.timestampVetorial)
-
-    conta = estado.contas.get(id_conta)
-    if not conta:
-        raise HTTPException(status_code=404, detail="Conta nao encontrada nesta agencia.")
-
-    conta["saldo"] += body.valor
-    estado.registro.registrar(
-        "TRANSFERENCIA_CREDITO_REMOTO",
-        ts,
-        {"idConta": id_conta, "valor": body.valor, "origemAgencia": body.origemAgencia},
+    mensageria.publicar(
+        f"agencia.{agencia_destino}.creditar",
+        {
+            "idConta": body.idDestino,
+            "valor": body.valor,
+            "vetorEnvio": ts_envio,
+            "origemAgencia": estado.id_agencia,
+        },
     )
-    return {"mensagem": "Credito remoto aplicado.", "saldoAtual": conta["saldo"]}
+
+    # Repare a mudanca de sentido em relacao ao Sprint 1: 200 aqui significa
+    # apenas "a mensagem foi publicada", nao "o credito ja foi aplicado na
+    # outra agencia" - a aplicacao efetiva acontece de forma assincrona, em
+    # um momento que quem chamou nao controla nem confirma na hora.
+    return {"mensagem": "Transferencia publicada para a agencia de destino (entrega assincrona)."}

@@ -7,7 +7,7 @@ from src.services import auth_service
 
 @pytest.fixture
 def cliente(tmp_path):
-    app = criar_app(id_agencia=1)
+    app = criar_app(id_agencia=1, iniciar_consumidor=False)
     app.state.registro.caminho_arquivo = tmp_path / "eventos-teste.jsonl"
     cliente = TestClient(app)
     cliente.headers.update({"Authorization": f"Bearer {auth_service.criar_token('aluno')}"})

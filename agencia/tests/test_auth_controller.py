@@ -10,7 +10,7 @@ from src.services import auth_service
 
 @pytest.fixture
 def cliente(tmp_path):
-    app = criar_app(id_agencia=0)
+    app = criar_app(id_agencia=0, iniciar_consumidor=False)
     app.state.registro.caminho_arquivo = tmp_path / "eventos-teste.jsonl"
     return TestClient(app)
 
@@ -70,34 +70,8 @@ def test_rota_protegida_com_token_invalido_retorna_401(cliente):
     assert resposta.status_code == 401
 
 
-# --- creditar-remoto usa um mecanismo diferente (service token) ----------
-
-
-def test_creditar_remoto_sem_service_token_retorna_401(cliente):
-    resposta = cliente.post("/contas/0/creditar-remoto", json={"valor": 10, "timestampVetorial": [1, 0, 0], "origemAgencia": 1})
-    assert resposta.status_code == 401
-
-
-def test_creditar_remoto_com_jwt_de_usuario_nao_e_aceito(cliente):
-    login = cliente.post("/auth/login", json={"usuario": "aluno", "senha": "senha123"})
-    token = login.json()["access_token"]
-    resposta = cliente.post(
-        "/contas/0/creditar-remoto",
-        json={"valor": 10, "timestampVetorial": [1, 0, 0], "origemAgencia": 1},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert resposta.status_code == 401
-
-
-def test_creditar_remoto_com_service_token_funciona(cliente):
-    cliente.post(
-        "/contas",
-        json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 0},
-        headers={"Authorization": f"Bearer {auth_service.criar_token('aluno')}"},
-    )
-    resposta = cliente.post(
-        "/contas/0/creditar-remoto",
-        json={"valor": 10, "timestampVetorial": [1, 0, 0], "origemAgencia": 1},
-        headers={"Authorization": f"Service {auth_service.SERVICE_TOKEN}"},
-    )
-    assert resposta.status_code == 200
+# Nao ha mais rota /contas/{id}/creditar-remoto (Sprint 1) nem mecanismo de
+# service token: o credito remoto agora chega via mensageria assincrona
+# (Sprint 2), consumida fora do ciclo de requisicao HTTP - ver
+# src/services/mensageria.py e a pergunta sobre seguranca do consumidor em
+# RESPOSTAS.md (secao 7.5).

@@ -43,16 +43,3 @@ def exigir_usuario_autenticado(authorization: str | None = Header(default=None))
         raise HTTPException(status_code=401, detail="Token invalido.")
 
     return payload["sub"]
-
-
-def exigir_token_de_servico(authorization: str | None = Header(default=None)) -> None:
-    """Dependency do FastAPI: protege a chamada agencia-a-agencia
-    (creditar-remoto) com um segredo compartilhado entre as agencias, em vez
-    do JWT de usuario do frontend - justificativa em RESPOSTAS.md (secao 11).
-    """
-    if not authorization or not authorization.startswith("Service "):
-        raise HTTPException(status_code=401, detail="Token de servico ausente.")
-
-    token = authorization.removeprefix("Service ").strip()
-    if token != auth_service.SERVICE_TOKEN:
-        raise HTTPException(status_code=401, detail="Token de servico invalido.")
