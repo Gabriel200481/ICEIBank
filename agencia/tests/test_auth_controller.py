@@ -74,7 +74,7 @@ def test_rota_protegida_com_token_invalido_retorna_401(cliente):
 
 
 def test_creditar_remoto_sem_service_token_retorna_401(cliente):
-    resposta = cliente.post("/contas/0/creditar-remoto", json={"valor": 10, "timestampLamport": 1, "origemAgencia": 1})
+    resposta = cliente.post("/contas/0/creditar-remoto", json={"valor": 10, "timestampVetorial": [1, 0, 0], "origemAgencia": 1})
     assert resposta.status_code == 401
 
 
@@ -83,7 +83,7 @@ def test_creditar_remoto_com_jwt_de_usuario_nao_e_aceito(cliente):
     token = login.json()["access_token"]
     resposta = cliente.post(
         "/contas/0/creditar-remoto",
-        json={"valor": 10, "timestampLamport": 1, "origemAgencia": 1},
+        json={"valor": 10, "timestampVetorial": [1, 0, 0], "origemAgencia": 1},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resposta.status_code == 401
@@ -97,7 +97,7 @@ def test_creditar_remoto_com_service_token_funciona(cliente):
     )
     resposta = cliente.post(
         "/contas/0/creditar-remoto",
-        json={"valor": 10, "timestampLamport": 1, "origemAgencia": 1},
+        json={"valor": 10, "timestampVetorial": [1, 0, 0], "origemAgencia": 1},
         headers={"Authorization": f"Service {auth_service.SERVICE_TOKEN}"},
     )
     assert resposta.status_code == 200

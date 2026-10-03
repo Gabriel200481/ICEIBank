@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src import config
 from src.controllers import auth_controller, contas_controller, status_controller, transferencias_controller
 from src.services.event_log import RegistroEventos
-from src.services.lamport_clock import RelogioLamport
+from src.services.vector_clock import RelogioVetorial
 
 
 def criar_app(id_agencia: int | None = None) -> FastAPI:
@@ -39,7 +39,7 @@ def criar_app(id_agencia: int | None = None) -> FastAPI:
 
     # Estado em memoria da agencia - sem banco de dados neste sprint (Parte C).
     app.state.id_agencia = id_agencia
-    app.state.relogio = RelogioLamport()
+    app.state.relogio = RelogioVetorial(id_agencia, config.NUMERO_AGENCIAS)
     app.state.registro = RegistroEventos(f"agencia-{id_agencia}")
     app.state.contas = {}
 

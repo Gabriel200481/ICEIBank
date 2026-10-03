@@ -77,9 +77,9 @@ def test_sacar_de_conta_inexistente(cliente):
     assert resposta.status_code == 404
 
 
-def test_cada_operacao_e_carimbada_com_relogio_de_lamport(cliente):
-    cliente.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 100})  # ts 1
-    cliente.post("/contas/0/depositar", json={"valor": 25})  # ts 2
-    cliente.post("/contas/0/sacar", json={"valor": 10})  # ts 3
+def test_cada_operacao_e_carimbada_com_relogio_vetorial(cliente):
+    cliente.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 100})  # vetor [1,0,0]
+    cliente.post("/contas/0/depositar", json={"valor": 25})  # vetor [2,0,0]
+    cliente.post("/contas/0/sacar", json={"valor": 10})  # vetor [3,0,0]
     app = cliente.app
-    assert app.state.relogio.contador == 3
+    assert app.state.relogio.vetor == [3, 0, 0]
