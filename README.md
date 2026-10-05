@@ -26,7 +26,7 @@
 | Sprint | Unidade da ementa       | Tecnologia         | Conceito de Sistemas Distribuídos | Status         |
 | ------ | ------------------------ | ------------------- | ----------------------------------- | -------------- |
 | 1      | U2 - Desenvolvimento Web | API REST / MVC       | Relógio lógico de Lamport         | Concluída |
-| 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Código completo — [evidências de terminal pendentes](evidencias/sprint2/COMO-CAPTURAR-EVIDENCIAS.md) |
+| 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Concluída |
 | 3      | U4 - Desenvolvimento Móvel | App Flutter          | Consenso (eleição de líder)        | Não iniciada |
 | 4      | U5 - Computação em Nuvem | Containers            | Transações distribuídas (2PC/Saga) | Não iniciada |
 
@@ -56,7 +56,7 @@
 - [x] Funcionalidade adicional (fila de auditoria com routing key coringa) implementada e documentada
 - [x] `RESPOSTAS.md` atualizado (seções 6.4, 7.5, 8.3 + funcionalidade adicional)
 - [x] Suite de testes automatizados rodando limpa (57 testes, incluindo integração real contra RabbitMQ)
-- [ ] `evidencias/sprint2/` completa — guia em [evidencias/sprint2/COMO-CAPTURAR-EVIDENCIAS.md](evidencias/sprint2/COMO-CAPTURAR-EVIDENCIAS.md)
+- [x] `evidencias/sprint2/` completa (4 prints de terminal reais)
 
 ---
 
