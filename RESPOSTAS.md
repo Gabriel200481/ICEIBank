@@ -764,5 +764,4 @@ Extras: `app-conflito-409.png` (tarefa 5 da seção 10.2: o app mostra o 409 de 
 - Split brain numa partição de rede (Parte B).
 - Rotas de Bully sem autenticação entre serviços (Parte A).
 - Transferência não funciona offline (Parte F).
-- A regressão não reexecutou o RabbitMQ real nem o frontend web em navegador real; ver README.
 - A aba Extrato do app carrega ao ser criada e não se atualiza sozinha: se for aberta antes de a conta existir, mostra "Conta não encontrada" até tocar em "Tentar de novo" (observado durante os prints).

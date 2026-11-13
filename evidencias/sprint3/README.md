@@ -16,6 +16,7 @@ Capturas de uma **execução real** em 12/11/2026: as 3 agências em consoles do
 | `app-sincronizacao.png` | App reconectando e sincronizando sozinho a operação pendente | F |
 | `app-conflito-409.png` | *(extra)* o app tratando o 409 de forma visível, com o estado real da conta | F |
 | `funcionalidade-adicional.png` | *(extra)* aba Extrato do app | Extra |
+| `regressao-frontend.png` | *(extra)* frontend web (Sprint 1) em Chrome real, após o Sprint 3 | Regressão |
 
 `app-failover.png` e `app-sincronizacao.png` são montagens lado a lado de capturas tiradas em sequência, sem edição do conteúdo.
 
@@ -33,5 +34,6 @@ Saídas reais de terminal e de testes, com data/hora e o comando no topo de cada
 | `sincronizacao-409.txt` | `POST /sincronizar`: caminho feliz, idempotência, conflito `ANTES` e `CONCORRENTES` (HTTP 409), conta intacta | E |
 | `flutter-offline-first.txt` | Modo avião, fila, UI otimista, sincronização ao reconectar, 409 real e reenvio sobre o estado atual | F |
 | `funcionalidade-adicional.txt` | Extrato por conta; a soma confere com o saldo e a operação em conflito não aparece | Extra |
+| `regressao.txt` | Suíte do backend com RabbitMQ real (123 passed), transferência entre agências pelo broker e frontend web em Chrome real | Regressão |
 
 Reproduzir: ver os comandos no topo de cada arquivo e o README da raiz.
