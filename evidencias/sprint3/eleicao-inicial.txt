@@ -1,0 +1,13 @@
+# Eleicao inicial (Bully) - 3 agencias reais (portas 4000-4002), subidas quase juntas
+# Data: 2026-11-12T21:07:54-03:00
+GET :4000/bully/lider -> {"liderId":2,"idAgencia":0}
+GET :4001/bully/lider -> {"liderId":2,"idAgencia":1}
+GET :4002/bully/lider -> {"liderId":2,"idAgencia":2}
+
+# Eventos de eleicao registrados (data/*.jsonl)
+{"agencia": "agencia-2", "tipo": "ELEICAO_INICIADA", "timestampVetorial": [0, 0, 1], "horaParede": "2026-11-13T00:07:50.734384+00:00", "detalhes": {"agencia": 2}}
+{"agencia": "agencia-2", "tipo": "NOVO_LIDER", "timestampVetorial": [3, 2, 6], "horaParede": "2026-11-13T00:07:50.796538+00:00", "detalhes": {"liderId": 2, "agencia": 2}}
+{"agencia": "agencia-1", "tipo": "ELEICAO_INICIADA", "timestampVetorial": [0, 1, 0], "horaParede": "2026-11-13T00:07:50.739195+00:00", "detalhes": {"agencia": 1}}
+{"agencia": "agencia-1", "tipo": "NOVO_LIDER", "timestampVetorial": [2, 4, 3], "horaParede": "2026-11-13T00:07:50.795810+00:00", "detalhes": {"liderId": 2, "agencia": 1}}
+{"agencia": "agencia-0", "tipo": "ELEICAO_INICIADA", "timestampVetorial": [1, 0, 0], "horaParede": "2026-11-13T00:07:50.741180+00:00", "detalhes": {"agencia": 0}}
+{"agencia": "agencia-0", "tipo": "NOVO_LIDER", "timestampVetorial": [4, 0, 2], "horaParede": "2026-11-13T00:07:50.776066+00:00", "detalhes": {"liderId": 2, "agencia": 0}}
