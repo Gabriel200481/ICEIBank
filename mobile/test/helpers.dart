@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:iceibank_mobile/api_client.dart';
+import 'package:iceibank_mobile/conectividade.dart';
 import 'package:iceibank_mobile/models.dart';
 
 /// ApiClient com comportamento programavel, sem rede.
@@ -69,3 +72,62 @@ class ApiFalsa extends ApiClient {
   @override
   Future<AgenciaLideranca> lideranca(int agencia) async => liderancas[agencia]!;
 }
+
+/// Servidor simulado com a mesma regra do backend (POST /sincronizar):
+/// IGUAIS/DEPOIS aplica; ANTES/CONCORRENTES e conflito; idempotente por idOperacao.
+class ServidorFalso extends ApiFalsa {
+  final Set<String> aplicadas = {};
+  bool perderProximaResposta = false;
+  bool forcarRecusa400 = false;
+  final List<List<int>> basesRecebidas = [];
+
+  String _comparar(List<int> a, List<int> b) {
+    final aMenor = List.generate(a.length, (i) => a[i] <= b[i]).every((x) => x);
+    final bMenor = List.generate(a.length, (i) => b[i] <= a[i]).every((x) => x);
+    if (aMenor && bMenor) return 'IGUAIS';
+    if (aMenor) return 'ANTES';
+    if (bMenor) return 'DEPOIS';
+    return 'CONCORRENTES';
+  }
+
+  /// Outro dispositivo mexe na conta direto no servidor.
+  void alteracaoExterna(double valor) {
+    conta = conta.copyWith(saldo: conta.saldo + valor, versao: [conta.versao[0] + 1, conta.versao[1], conta.versao[2]]);
+  }
+
+  @override
+  Future<SyncResultado> sincronizar({
+    required String idOperacao,
+    required String tipo,
+    required int idConta,
+    required double valor,
+    required List<int> vetorBase,
+  }) async {
+    if (offline) throw SemConexaoException(0);
+    basesRecebidas.add(vetorBase);
+    if (aplicadas.contains(idOperacao)) return SyncResultado(SyncStatus.jaAplicada, conta);
+    final relacao = _comparar(vetorBase, conta.versao);
+    if (relacao == 'ANTES' || relacao == 'CONCORRENTES') return SyncResultado(SyncStatus.conflito, conta, relacao: relacao);
+    if (forcarRecusa400) {
+      forcarRecusa400 = false;
+      throw ApiException(400, 'Saldo insuficiente.');
+    }
+    conta = conta.copyWith(
+      saldo: conta.saldo + (tipo == 'DEPOSITO' ? valor : -valor),
+      versao: [conta.versao[0] + 1, conta.versao[1], conta.versao[2]],
+    );
+    aplicadas.add(idOperacao);
+    if (perderProximaResposta) {
+      perderProximaResposta = false;
+      throw SemConexaoException(0); // aplicou, mas a resposta nao chegou
+    }
+    return SyncResultado(SyncStatus.aplicada, conta);
+  }
+}
+
+class RedeFalsa implements Conectividade {
+  final controle = StreamController<bool>.broadcast();
+  @override
+  Stream<bool> get online => controle.stream;
+}
+

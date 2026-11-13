@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
 import 'api_client.dart';
+import 'armazenamento.dart';
+import 'conectividade.dart';
 import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key, required this.api});
+  const LoginPage({super.key, required this.api, this.armazenamento, this.conectividade});
 
   final ApiClient api;
+  final ArmazenamentoLocal? armazenamento;
+  final Conectividade? conectividade;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -33,7 +37,12 @@ class _LoginPageState extends State<LoginPage> {
       await widget.api.login(_usuario.text.trim(), _senha.text);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => HomePage(api: widget.api, idConta: idConta)),
+        MaterialPageRoute(builder: (_) => HomePage(
+            api: widget.api,
+            idConta: idConta,
+            armazenamento: widget.armazenamento,
+            conectividade: widget.conectividade,
+          )),
       );
     } on ApiException catch (e) {
       setState(() => _erro = e.status == 401 ? 'Usuario ou senha invalidos.' : e.mensagem);

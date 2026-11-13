@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:iceibank_mobile/armazenamento.dart';
 import 'package:iceibank_mobile/conta_page.dart';
+import 'package:iceibank_mobile/conta_repositorio.dart';
 import 'package:iceibank_mobile/home_page.dart';
 import 'package:iceibank_mobile/lideranca_page.dart';
 import 'package:iceibank_mobile/lideranca_service.dart';
@@ -10,6 +12,9 @@ import 'package:iceibank_mobile/models.dart';
 import 'helpers.dart';
 
 Widget app(Widget home) => MaterialApp(home: Scaffold(body: home));
+
+Widget contaPage(ApiFalsa api, [ContaRepositorio? repo]) =>
+    app(ContaPage(api: api, repositorio: repo ?? ContaRepositorio(api: api, armazenamento: ArmazenamentoMemoria()), idConta: 0));
 
 void main() {
   group('Login', () {
@@ -53,14 +58,14 @@ void main() {
 
   group('Conta (fluxo bancario)', () {
     testWidgets('mostra o saldo', (tester) async {
-      await tester.pumpWidget(app(ContaPage(api: ApiFalsa(), idConta: 0)));
+      await tester.pumpWidget(contaPage(ServidorFalso()));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('saldo')), findsOneWidget);
       expect(find.text('R\$ 100,00'), findsOneWidget);
     });
 
     testWidgets('deposito atualiza o saldo', (tester) async {
-      await tester.pumpWidget(app(ContaPage(api: ApiFalsa(), idConta: 0)));
+      await tester.pumpWidget(contaPage(ServidorFalso()));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('depositar')));
       await tester.pumpAndSettle();
@@ -71,7 +76,7 @@ void main() {
     });
 
     testWidgets('saque atualiza o saldo', (tester) async {
-      await tester.pumpWidget(app(ContaPage(api: ApiFalsa(), idConta: 0)));
+      await tester.pumpWidget(contaPage(ServidorFalso()));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('sacar')));
       await tester.pumpAndSettle();
@@ -82,7 +87,7 @@ void main() {
     });
 
     testWidgets('saque maior que o saldo mostra o erro do servidor', (tester) async {
-      await tester.pumpWidget(app(ContaPage(api: ApiFalsa(), idConta: 0)));
+      await tester.pumpWidget(contaPage(ServidorFalso()));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('sacar')));
       await tester.pumpAndSettle();
@@ -94,8 +99,8 @@ void main() {
     });
 
     testWidgets('transferencia chama a API com origem, destino e valor', (tester) async {
-      final api = ApiFalsa();
-      await tester.pumpWidget(app(ContaPage(api: api, idConta: 0)));
+      final api = ServidorFalso();
+      await tester.pumpWidget(contaPage(api));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('transferir')));
       await tester.pumpAndSettle();
@@ -108,8 +113,8 @@ void main() {
     });
 
     testWidgets('conta inexistente oferece abrir conta', (tester) async {
-      final api = ApiFalsa()..contaExiste = false;
-      await tester.pumpWidget(app(ContaPage(api: api, idConta: 0)));
+      final api = ServidorFalso()..contaExiste = false;
+      await tester.pumpWidget(contaPage(api));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('abrir-conta')));
       await tester.pumpAndSettle();
@@ -121,8 +126,8 @@ void main() {
     });
 
     testWidgets('agencia fora do ar mostra erro de conexao', (tester) async {
-      final api = ApiFalsa()..offline = true;
-      await tester.pumpWidget(app(ContaPage(api: api, idConta: 0)));
+      final api = ServidorFalso()..offline = true;
+      await tester.pumpWidget(contaPage(api));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('erro')), findsOneWidget);
     });

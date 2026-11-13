@@ -1,0 +1,18 @@
+# Modo offline-first (Parte F) - app (ContaRepositorio + ApiClient reais) contra a agencia 0 real
+$ ICEIBANK_REAL=1 flutter test test/integracao_real_test.dart
+1. app online. saldo servidor=100.0 versao=[2, 0, 0]
+2. MODO AVIAO: deposito 50 + saque 20 feitos offline
+   saldoExibido (otimista)=130.0  pendentes=2  online=false
+   saldo REAL no servidor (outro aparelho)=100.0
+   armazenamento local guardou: [iceibank.conta.0]
+3. REDE VOLTOU: sincronizacao automatica da fila
+   pendentes=0  saldo servidor=130.0  versao=[4, 0, 0]
+4. OFFLINE de novo: deposito 1000 (app viu versao [4, 0, 0])
+   enquanto isso OUTRO aparelho deposita 10 direto no servidor
+5. REDE VOLTOU: servidor respondeu HTTP 409
+   estado da operacao: conflito
+   mensagem ao usuario: Conflito (ANTES): a conta mudou no servidor desde que voce a viu.
+   servidor agora: saldo=140.0 versao=[5, 0, 0]
+   saldoExibido=140.0 (o deposito de 1000 em conflito NAO entra no saldo)
+6. usuario escolheu "Reenviar sobre o estado atual": pendentes=0 saldo servidor=1140.0
+All tests passed!
