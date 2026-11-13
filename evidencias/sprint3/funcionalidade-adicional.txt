@@ -1,0 +1,16 @@
+# Funcionalidade adicional (Sprint 3): extrato por conta - agencia 0 real
+$ abre contas 0 e 3, deposita 200, saca 50, transfere 30 (0 -> 3), sincroniza deposito offline de 10
+
+$ GET /contas/0/extrato
+saldoAtual = 230.0
+    100.00  Abertura de conta
+    200.00  Deposito
+    -50.00  Saque
+    -30.00  Transferencia enviada para a conta 3
+     10.00  Deposito (sincronizado do app)
+soma dos movimentos = 230.0 (confere com o saldo)
+(a operacao em conflito x2 nao aparece: nunca foi aplicada)
+
+$ GET /contas/3/extrato
+      0.00  Abertura de conta
+     30.00  Transferencia recebida da conta 0

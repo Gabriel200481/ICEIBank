@@ -5,6 +5,7 @@ import 'armazenamento.dart';
 import 'conectividade.dart';
 import 'conta_page.dart';
 import 'conta_repositorio.dart';
+import 'extrato_page.dart';
 import 'lideranca_page.dart';
 import 'lideranca_service.dart';
 
@@ -58,6 +59,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final paginas = [
       ContaPage(api: widget.api, repositorio: _repositorio, idConta: widget.idConta),
+      ExtratoPage(api: widget.api, idConta: widget.idConta),
       LiderancaPage(servico: _lideranca),
     ];
     return Scaffold(
@@ -68,6 +70,7 @@ class _HomePageState extends State<HomePage> {
         onDestinationSelected: (i) => setState(() => _aba = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: 'Conta'),
+          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Extrato'),
           NavigationDestination(icon: Icon(Icons.hub_outlined), label: 'Lideranca'),
         ],
       ),
