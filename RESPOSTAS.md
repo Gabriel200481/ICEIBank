@@ -633,7 +633,7 @@ Mantidos **Python 3.13 + FastAPI** no backend (a seção 11 do roteiro permite a
 - **Sincronização, uma operação por chamada:** o app envia a fila em ordem; cada operação leva o `vetorBase` (versão da conta que o app viu). Dentro da mesma sincronização, a operação seguinte usa a versão devolvida pela anterior, porque depende causalmente dela.
 - **Quando é conflito:** `vetorBase` igual ou depois da versão da conta → aplica; **antes** (o servidor evoluiu) ou **concorrente** → HTTP 409, sem aplicar e devolvendo o estado atual.
 - **Offline-first só para depósito e saque.** Transferência exige conexão: mexe em duas contas, possivelmente em agências diferentes, e o mecanismo de sincronização trata uma conta por operação.
-- **Evidências:** o roteiro pede prints `.png`; o que existe hoje são saídas reais de terminal e de testes em `evidencias/sprint3/` (ver a seção "Evidências" abaixo). As capturas do app dependem de emulador e estão pendentes (issue #68).
+- **Evidências:** prints `.png` reais de terminal e do app em emulador, em `evidencias/sprint3/` (ver a seção "Evidências" abaixo).
 
 ## Parte A - Perguntas (Seção 5.5)
 
@@ -743,19 +743,20 @@ Decisões deliberadas, que mantêm o objetivo do roteiro:
 
 ## Evidências
 
-O roteiro pede 8 prints `.png` (seção 4.2). O que existe hoje são saídas reais de terminal e de testes em `evidencias/sprint3/` (`.txt`, com data e comando). Mapa:
+Os 8 prints do roteiro (seção 4.2) estão em `evidencias/sprint3/`, capturados de uma **execução real** em 12/11/2026: as 3 agências em consoles do Windows (com `Get-Date` visível) e o app Flutter num emulador Android (Pixel 6, Android 35) apontando para as agências reais (`10.0.2.2`). Os registros `.txt` anteriores continuam na pasta como complemento.
 
-| Print pedido pelo roteiro | Registro atual |
-|---|---|
-| `eleicao-inicial.png` | `eleicao-inicial.txt` |
-| `failover.png` | `failover-heartbeat.txt` |
-| `historico-lideranca.png` | `historico-lideranca.txt` |
-| `conflito-sincronizacao.png` | `sincronizacao-409.txt` |
-| `app-lider-atual.png` | `flutter-painel-lider.txt` (testes) e `flutter-fluxo-bancario.txt` |
-| `app-failover.png` | `flutter-painel-lider.txt` (teste do failover) |
-| `app-offline.png` e `app-sincronizacao.png` | `flutter-offline-first.txt` |
+| Print pedido pelo roteiro | O que mostra | Complemento em texto |
+|---|---|---|
+| `eleicao-inicial.png` | As 3 agências sobem e `/bully/lider` devolve a mesma líder (2) nas três | `eleicao-inicial.txt` |
+| `failover.png` | Líder (agência 2) derrubada às 23:03:01; às 23:03:11 as outras duas concordam na líder 1 | `failover-heartbeat.txt` |
+| `historico-lideranca.png` | Tabela de mandatos reconstruída dos logs (2, 1, 2, 1, 2) | `historico-lideranca.txt` |
+| `app-lider-atual.png` | Painel do app: líder atual, as 3 agências no ar e o histórico de mudanças | `flutter-painel-lider.txt` |
+| `app-failover.png` | Mesma tela antes, durante ("Eleição em andamento") e depois (nova líder), sem tocar no app | `flutter-painel-lider.txt` |
+| `conflito-sincronizacao.png` | `POST /sincronizar` com vetor antigo devolve 409 `ANTES`; com o vetor atual devolve 200 | `sincronizacao-409.txt` |
+| `app-offline.png` | Modo avião, depósito feito offline aparece como **Pendente** (saldo provisório) sem erro | `flutter-offline-first.txt` |
+| `app-sincronizacao.png` | Ao reconectar, o app sincroniza sozinho e a operação deixa de ser pendente | `flutter-offline-first.txt` |
 
-**Pendente:** as capturas de tela `.png`, principalmente as do app, dependem de rodar o app em um emulador; acompanhadas na issue #68.
+Extras: `app-conflito-409.png` (tarefa 5 da seção 10.2: o app mostra o 409 de forma visível, com o estado real da conta e os botões para decidir) e `funcionalidade-adicional.png` (aba Extrato). `app-failover.png` e `app-sincronizacao.png` são montagens lado a lado de capturas tiradas em sequência, sem editar o conteúdo delas.
 
 ## Limitações conhecidas
 
@@ -763,5 +764,4 @@ O roteiro pede 8 prints `.png` (seção 4.2). O que existe hoje são saídas rea
 - Split brain numa partição de rede (Parte B).
 - Rotas de Bully sem autenticação entre serviços (Parte A).
 - Transferência não funciona offline (Parte F).
-- A regressão não reexecutou o RabbitMQ real nem o frontend web em navegador real; ver README.
-- Prints `.png` do app ainda não capturados (issue #68).
+- A aba Extrato do app carrega ao ser criada e não se atualiza sozinha: se for aberta antes de a conta existir, mostra "Conta não encontrada" até tocar em "Tentar de novo" (observado durante os prints).

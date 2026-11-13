@@ -1,0 +1,46 @@
+# Regressao do Sprint 3 - Sprints 1 e 2 contra RabbitMQ real e navegador real
+# Data: 2026-11-12T23:31:05-03:00
+# Ambiente: RabbitMQ 3-management em Docker (localhost:5672), 3 agencias (portas 4000-4002), Chrome + Playwright
+
+## 1. Suite completa do backend com o broker real (RABBITMQ_URL definida)
+$ cd agencia; $env:RABBITMQ_URL="amqp://guest:guest@localhost:5672/"; python -m pytest -q -rs
+........................................................................ [ 58%]
+...................................................                      [100%]
+123 passed in 2.88s
+# Antes (sem broker): 120 passed, 3 skipped. Os 3 testes de test_mensageria.py/test_auditoria.py agora rodam contra o RabbitMQ real.
+
+## Transferencia entre agencias via RabbitMQ real (agencia 0 -> agencia 1)
+$ POST :4000/contas {id:0, saldoInicial:100}
+{"id":0,"nomeAluno":"Ana","saldo":100.0,"versao":[5,0,2]}
+$ POST :4001/contas {id:1, saldoInicial:0}
+{"id":1,"nomeAluno":"Bia","saldo":0.0,"versao":[2,5,4]}
+$ POST :4000/transferencias {idOrigem:0, idDestino:1, valor:35}
+{"mensagem":"Transferencia publicada para a agencia de destino (entrega assincrona)."} [HTTP 200]
+$ GET :4000/contas/0 (origem, debitada)
+{"id":0,"nomeAluno":"Ana","saldo":65.0,"versao":[6,0,2]}
+$ GET :4001/contas/1 (destino, creditada pela mensagem)
+{"id":1,"nomeAluno":"Bia","saldo":35.0,"versao":[7,6,4]}
+## Fila/consumidores no broker
+Timeout: 60.0 seconds ...
+Listing queues for vhost / ...
+name	messages	consumers
+fila-agencia-0	0	1
+fila-agencia-12641	0	0
+fila-auditoria-teste-111dc54b	0	0
+fila-agencia-1	0	1
+fila-agencia-32111	0	0
+
+## 3. Frontend web (Sprint 1, sem alteracoes) em Chrome real, contra as 3 agencias
+$ python -m http.server 5500   (pasta frontend/)  +  python regressao_frontend.py
+[OK] pagina carrega (titulo: 'ICEIBank')
+[OK] login JWT (aluno/senha123) abre a area logada - 0 — localhost:4000
+[OK] criar conta 3 e consultar saldo -> 'Conta 3 (Carla): saldo R$ 100.00'
+[OK] depositar 50 -> 'Conta 3 (Carla): saldo R$ 150.00'
+[OK] sacar 20 -> 'Conta 3 (Carla): saldo R$ 130.00'
+[OK] saque maior que o saldo mostra erro visivel -> 'Erro: Saldo insuficiente.'
+[OK] transferencia local 3 -> 6 (valor 10) -> 'Conta 6 (Davi): saldo R$ 10.00'
+[OK] transferencia ENTRE agencias 3 -> 4 (valor 30, via RabbitMQ) -> 'Conta 4 (Eva): saldo R$ 30.00'
+[OK] origem debitada (130 - 10 - 30 = 90) -> 'Conta 3 (Carla): saldo R$ 90.00'
+[OK] logout volta para o login 
+RESULTADO: TODOS OS PASSOS OK
+# Print da tela final: regressao-frontend.png

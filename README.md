@@ -70,9 +70,9 @@
 - [x] Endpoint de sincronização no backend (Parte E), detectando conflito via relógio vetorial (409), não só o caminho feliz
 - [x] App Flutter em modo offline-first (Parte F): armazenamento local, fila de pendentes, UI otimista e sincronização automática ao reconectar
 - [x] O conflito de sincronização (HTTP 409) é tratado de forma visível no app
-- [x] JWT (testes automatizados), frontend web (não alterado; só usa `id`, `nomeAluno` e `saldo`, que não mudaram) e mensageria/relógio vetorial (testes de controller) sem regressão - limites descritos na seção Testes
+- [x] JWT (testes automatizados), frontend web (não alterado; só usa `id`, `nomeAluno` e `saldo`, que não mudaram) e mensageria/relógio vetorial sem regressão (pytest com RabbitMQ real, transferência entre agências pelo broker e frontend em Chrome real; ver `evidencias/sprint3/regressao.txt`)
 - [x] Funcionalidade adicional (extrato por conta, backend + app) implementada e documentada
-- [x] `evidencias/sprint3/` com 8 evidências (saídas reais de terminal/testes, ver o README da pasta)
+- [x] `evidencias/sprint3/` com os 8 prints `.png` do roteiro (terminal e app em emulador), registros em texto e a regressão (ver o README da pasta)
 - [x] `RESPOSTAS.md` atualizado (seções 5.5, 6.4, 7.3, 8.3, 9.6 e 10.3 + funcionalidade adicional)
 
 ---
@@ -353,7 +353,7 @@ App mobile: ver [mobile/README.md](mobile/README.md).
 
 ## Testes
 
-Cada peça é testada isoladamente (unitário) antes de ser integrada à API, e a integração é validada com as 3 agências rodando de verdade (requisições HTTP reais via `curl`/`Invoke-RestMethod`, e o frontend dirigido por um navegador real). **120 testes automatizados** (pytest) e **62 testes do app** (`flutter test`) no Sprint 3 (57 de pytest no Sprint 2) - a maioria roda sem precisar de infraestrutura externa (RabbitMQ é simulado via monkeypatch nos testes de controller); um pequeno grupo (`test_mensageria.py`, `test_auditoria.py`) valida publish/subscribe de ponta a ponta contra um broker real, pulado automaticamente se `RABBITMQ_URL` não estiver definida.
+Cada peça é testada isoladamente (unitário) antes de ser integrada à API, e a integração é validada com as 3 agências rodando de verdade (requisições HTTP reais via `curl`/`Invoke-RestMethod`, e o frontend dirigido por um navegador real). **123 testes automatizados** (pytest, com RabbitMQ real; 120 rodam sem broker) e **62 testes do app** (`flutter test`) no Sprint 3 (57 de pytest no Sprint 2) - a maioria roda sem precisar de infraestrutura externa (RabbitMQ é simulado via monkeypatch nos testes de controller); um pequeno grupo (`test_mensageria.py`, `test_auditoria.py`) valida publish/subscribe de ponta a ponta contra um broker real, pulado automaticamente se `RABBITMQ_URL` não estiver definida.
 
 ```powershell
 cd agencia
@@ -369,7 +369,7 @@ flutter analyze
 flutter test
 ```
 
-**Limite da regressão do Sprint 3:** os testes que usam RabbitMQ real (`test_mensageria.py`, `test_auditoria.py`) foram **pulados** nesta validação, porque o ambiente usado não tinha broker. A mensageria e o relógio vetorial seguem cobertos pelos testes de controller (com o broker simulado) e a transferência entre agências por mensageria não foi reexecutada contra um RabbitMQ real neste sprint. O frontend web também não foi reaberto em navegador real neste sprint.
+**Regressão do Sprint 3 (12/11/2026):** com um RabbitMQ real em Docker, a suíte completa do backend passou (**123 passed**, incluindo os 3 testes de `test_mensageria.py`/`test_auditoria.py` que antes eram pulados), uma transferência entre agências (conta 0 → conta 1) foi entregue pelo broker e o frontend web, sem alterações, foi dirigido em um Chrome real (login JWT, criar conta, saldo, depósito, saque, erro de saldo insuficiente, transferência local e entre agências). Registro e print em `evidencias/sprint3/regressao.txt` e `regressao-frontend.png`.
 
 ---
 
