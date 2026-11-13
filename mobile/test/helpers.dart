@@ -69,6 +69,17 @@ class ApiFalsa extends ApiClient {
     return 'Transferencia concluida.';
   }
 
+  List<MovimentoExtrato> movimentos = const [
+    MovimentoExtrato(descricao: 'Abertura de conta', valor: 100, horaParede: '2026-11-13T00:00:00+00:00'),
+    MovimentoExtrato(descricao: 'Saque', valor: -30, horaParede: '2026-11-13T00:01:00+00:00'),
+  ];
+
+  @override
+  Future<List<MovimentoExtrato>> extrato(int id) async {
+    if (offline) throw SemConexaoException(id % 3);
+    return movimentos;
+  }
+
   @override
   Future<AgenciaLideranca> lideranca(int agencia) async => liderancas[agencia]!;
 }
