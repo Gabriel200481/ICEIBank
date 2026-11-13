@@ -7,18 +7,31 @@ isolar o estado de cada instancia).
 """
 
 import os
+import threading
+import time
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src import config
-from src.controllers import auth_controller, contas_controller, status_controller, transferencias_controller
+from src.controllers import (
+    auth_controller,
+    bully_controller,
+    contas_controller,
+    status_controller,
+    transferencias_controller,
+)
 from src.services import mensageria
+from src.services.bully import Bully, enviar_http
 from src.services.event_log import RegistroEventos
 from src.services.vector_clock import RelogioVetorial
 
 
-def criar_app(id_agencia: int | None = None, iniciar_consumidor: bool = True) -> FastAPI:
+def criar_app(
+    id_agencia: int | None = None,
+    iniciar_consumidor: bool = True,
+    iniciar_bully: bool = True,
+) -> FastAPI:
     if id_agencia is None:
         id_agencia = int(os.environ.get("AGENCIA_ID", "0"))
 
@@ -48,10 +61,21 @@ def criar_app(id_agencia: int | None = None, iniciar_consumidor: bool = True) ->
     app.state.registro = registro
     app.state.contas = contas
 
+    # Eleicao de lider (Sprint 3): Bully entre as agencias.
+    bully = Bully(
+        id_agencia,
+        [a["id"] for a in config.AGENCIAS],
+        relogio,
+        registro,
+        enviar_http(config.AGENCIAS),
+    )
+    app.state.bully = bully
+
     app.include_router(auth_controller.router)
     app.include_router(contas_controller.router)
     app.include_router(transferencias_controller.router)
     app.include_router(status_controller.router)
+    app.include_router(bully_controller.router)
 
     @app.get("/")
     def raiz():
@@ -97,6 +121,15 @@ def criar_app(id_agencia: int | None = None, iniciar_consumidor: bool = True) ->
 
     if iniciar_consumidor:
         mensageria.assinar(id_agencia, _processar_credito_recebido)
+
+    if iniciar_bully and not config.BULLY_DESLIGADO:
+        # Pequeno atraso para o servidor HTTP ja estar escutando quando as
+        # outras agencias responderem; a eleicao inicial roda em thread.
+        def _eleicao_inicial() -> None:
+            time.sleep(config.BULLY_ATRASO_INICIAL)
+            bully.iniciar_eleicao()
+
+        threading.Thread(target=_eleicao_inicial, daemon=True).start()
 
     return app
 

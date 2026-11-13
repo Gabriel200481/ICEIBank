@@ -26,3 +26,12 @@ def agencia_responsavel(id_conta: int) -> int:
 
 def url_da_agencia(id_agencia: int) -> str:
     return next(a["url"] for a in AGENCIAS if a["id"] == id_agencia)
+
+
+# Segundos de espera antes da eleicao inicial (o servidor HTTP precisa estar
+# no ar para as outras agencias conseguirem responder).
+BULLY_ATRASO_INICIAL = float(os.environ.get("BULLY_ATRASO_INICIAL", "1.5"))
+
+# Permite desligar a eleicao automatica (usado na suite de testes, para nao
+# disparar threads de rede nem escrever nos logs reais ao importar o app).
+BULLY_DESLIGADO = os.environ.get("BULLY_DESLIGADO", "") == "1"
