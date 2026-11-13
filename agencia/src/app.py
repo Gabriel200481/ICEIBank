@@ -18,6 +18,7 @@ from src.controllers import (
     auth_controller,
     bully_controller,
     contas_controller,
+    sync_controller,
     status_controller,
     transferencias_controller,
 )
@@ -55,11 +56,14 @@ def criar_app(
     relogio = RelogioVetorial(id_agencia, config.NUMERO_AGENCIAS)
     registro = RegistroEventos(f"agencia-{id_agencia}")
     contas: dict = {}
+    # Operacoes de sincronizacao ja aplicadas (idempotencia): idOperacao -> idConta
+    operacoes_aplicadas: dict = {}
 
     app.state.id_agencia = id_agencia
     app.state.relogio = relogio
     app.state.registro = registro
     app.state.contas = contas
+    app.state.operacoes_aplicadas = operacoes_aplicadas
 
     # Eleicao de lider (Sprint 3): Bully entre as agencias.
     bully = Bully(
@@ -78,6 +82,7 @@ def criar_app(
     app.include_router(transferencias_controller.router)
     app.include_router(status_controller.router)
     app.include_router(bully_controller.router)
+    app.include_router(sync_controller.router)
 
     @app.get("/")
     def raiz():
@@ -111,6 +116,7 @@ def criar_app(
             return
 
         conta["saldo"] += valor
+        conta["versao"] = vetor
         registro.registrar(
             "TRANSFERENCIA_CREDITO_REMOTO",
             vetor,

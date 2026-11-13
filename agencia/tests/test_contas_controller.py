@@ -20,7 +20,7 @@ def cliente(tmp_path):
 def test_criar_conta_na_agencia_correta(cliente):
     resposta = cliente.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 100})
     assert resposta.status_code == 201
-    assert resposta.json() == {"id": 0, "nomeAluno": "Ana", "saldo": 100}
+    assert resposta.json() == {"id": 0, "nomeAluno": "Ana", "saldo": 100, "versao": [1, 0, 0]}
 
 
 def test_criar_conta_que_nao_pertence_a_agencia(cliente):

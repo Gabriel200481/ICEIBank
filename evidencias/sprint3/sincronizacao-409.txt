@@ -1,0 +1,31 @@
+# Sincronizacao offline-first (Parte E) - agencia 0 real, porta 4000
+
+$ POST /contas {id:0, saldoInicial:100}
+{"id":0,"nomeAluno":"Ana","saldo":100.0,"versao":[1,0,0]}
+
+## Caminho feliz: cliente offline viu versao [1,0,0] e envia deposito de 10 com vetorBase [1,0,0]
+{"status":"APLICADA","idOperacao":"op-1","conta":{"id":0,"nomeAluno":"Ana","saldo":110.0,"versao":[2,0,0]}}
+HTTP 200
+
+## Reenvio da mesma op-1 (idempotencia)
+{"status":"JA_APLICADA","idOperacao":"op-1","conta":{"id":0,"nomeAluno":"Ana","saldo":110.0,"versao":[2,0,0]}}
+HTTP 200
+
+## Outro dispositivo altera a conta no servidor (deposito direto de 50)
+{"id":0,"nomeAluno":"Ana","saldo":160.0,"versao":[3,0,0]}
+
+## Cliente desatualizado (ainda com base [1,0,0]) tenta sacar 30 -> CONFLITO esperado (409)
+{"status":"CONFLITO","relacao":"ANTES","idOperacao":"op-2","vetorBase":[1,0,0],"versaoServidor":[3,0,0],"conta":{"id":0,"nomeAluno":"Ana","saldo":160.0,"versao":[3,0,0]}}
+HTTP 409
+
+## Cliente concorrente: base [1,0,2] (viu algo da agencia 2 que o servidor nao tem) -> 409 CONCORRENTES
+{"status":"CONFLITO","relacao":"CONCORRENTES","idOperacao":"op-3","vetorBase":[1,0,2],"versaoServidor":[3,0,0],"conta":{"id":0,"nomeAluno":"Ana","saldo":160.0,"versao":[3,0,0]}}
+HTTP 409
+
+## Saldo final (as operacoes em conflito nao foram aplicadas)
+{"id":0,"nomeAluno":"Ana","saldo":160.0,"versao":[3,0,0]}
+
+## Eventos SYNC_* no log da agencia
+{"agencia": "agencia-0", "tipo": "SYNC_APLICADO", "timestampVetorial": [2, 0, 0], "horaParede": "2026-11-13T00:12:01.746259+00:00", "detalhes": {"idOperacao": "op-1", "idConta": 0, "tipo": "DEPOSITO", "valor": 10.0, "novoSaldo": 110.0}}
+{"agencia": "agencia-0", "tipo": "SYNC_CONFLITO", "timestampVetorial": [4, 0, 0], "horaParede": "2026-11-13T00:12:01.762799+00:00", "detalhes": {"idOperacao": "op-2", "idConta": 0, "tipo": "SAQUE", "valor": 30.0, "vetorBase": [1, 0, 0], "versaoServidor": [3, 0
+{"agencia": "agencia-0", "tipo": "SYNC_CONFLITO", "timestampVetorial": [5, 0, 2], "horaParede": "2026-11-13T00:12:01.768208+00:00", "detalhes": {"idOperacao": "op-3", "idConta": 0, "tipo": "SAQUE", "valor": 30.0, "vetorBase": [1, 0, 2], "versaoServidor": [3, 0
