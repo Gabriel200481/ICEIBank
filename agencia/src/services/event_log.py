@@ -32,3 +32,10 @@ class RegistroEventos:
             arquivo.write(json.dumps(evento, ensure_ascii=False) + "\n")
         print(f"[Vetor {timestamp_vetorial}] {tipo} {detalhes}")
         return evento
+
+    def ler(self) -> list[dict[str, Any]]:
+        """Relê todos os eventos já gravados nesta agência (ordem de gravação)."""
+        if not self.caminho_arquivo.exists():
+            return []
+        linhas = self.caminho_arquivo.read_text(encoding="utf-8").splitlines()
+        return [json.loads(linha) for linha in linhas if linha.strip()]

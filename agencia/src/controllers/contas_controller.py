@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from src import config
 from src.controllers.auth_controller import exigir_usuario_autenticado
+from src.services.extrato import montar_extrato
 
 router = APIRouter(dependencies=[Depends(exigir_usuario_autenticado)])
 
@@ -40,6 +41,16 @@ def consultar_saldo(id_conta: int, request: Request):
     if not conta:
         raise HTTPException(status_code=404, detail="Conta nao encontrada nesta agencia.")
     return conta
+
+
+@router.get("/contas/{id_conta}/extrato")
+def extrato(id_conta: int, request: Request):
+    estado = request.app.state
+    conta = estado.contas.get(id_conta)
+    if not conta:
+        raise HTTPException(status_code=404, detail="Conta nao encontrada nesta agencia.")
+    movimentos = montar_extrato(estado.registro.ler(), id_conta)
+    return {"idConta": id_conta, "saldoAtual": conta["saldo"], "movimentos": movimentos}
 
 
 @router.post("/contas/{id_conta}/depositar")
