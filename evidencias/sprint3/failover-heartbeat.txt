@@ -1,0 +1,25 @@
+# Failover por heartbeat - 3 agencias reais (heartbeat 1s, 2 falhas seguidas)
+## 1. Estado inicial
+:4000 -> {"liderId":2,"idAgencia":0}
+:4001 -> {"liderId":2,"idAgencia":1}
+:4002 -> {"liderId":2,"idAgencia":2}
+## 2. Derrubando a lider (agencia 2) em 21:09:08
+## 3. Apos a queda, sem intervencao manual (21:09:15)
+:4000 -> {"liderId":1,"idAgencia":0}
+:4001 -> {"liderId":1,"idAgencia":1}
+:4002 -> FORA DO AR
+## 4. Agencia 2 volta ao ar em 21:09:15
+:4000 -> {"liderId":2,"idAgencia":0}
+:4001 -> {"liderId":2,"idAgencia":1}
+:4002 -> {"liderId":2,"idAgencia":2}
+
+## Eventos (LIDER_CAIU / NOVO_LIDER) por hora de parede
+00:09:04.704 agencia-0 NOVO_LIDER {'liderId': 2, 'agencia': 0}
+00:09:04.725 agencia-1 NOVO_LIDER {'liderId': 2, 'agencia': 1}
+00:09:04.726 agencia-2 NOVO_LIDER {'liderId': 2, 'agencia': 2}
+00:09:09.805 agencia-1 LIDER_CAIU {'liderId': 2, 'detectadoPor': 1}
+00:09:09.836 agencia-0 NOVO_LIDER {'liderId': 1, 'agencia': 0}
+00:09:09.851 agencia-1 NOVO_LIDER {'liderId': 1, 'agencia': 1}
+00:09:17.706 agencia-0 NOVO_LIDER {'liderId': 2, 'agencia': 0}
+00:09:17.724 agencia-1 NOVO_LIDER {'liderId': 2, 'agencia': 1}
+00:09:17.724 agencia-2 NOVO_LIDER {'liderId': 2, 'agencia': 2}

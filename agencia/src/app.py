@@ -22,7 +22,7 @@ from src.controllers import (
     transferencias_controller,
 )
 from src.services import mensageria
-from src.services.bully import Bully, enviar_http
+from src.services.bully import Bully, enviar_http, ping_http
 from src.services.event_log import RegistroEventos
 from src.services.vector_clock import RelogioVetorial
 
@@ -68,6 +68,8 @@ def criar_app(
         relogio,
         registro,
         enviar_http(config.AGENCIAS),
+        ping=ping_http(config.AGENCIAS),
+        falhas_para_eleicao=config.HEARTBEAT_FALHAS,
     )
     app.state.bully = bully
 
@@ -128,6 +130,7 @@ def criar_app(
         def _eleicao_inicial() -> None:
             time.sleep(config.BULLY_ATRASO_INICIAL)
             bully.iniciar_eleicao()
+            bully.iniciar_heartbeat(config.HEARTBEAT_INTERVALO)
 
         threading.Thread(target=_eleicao_inicial, daemon=True).start()
 

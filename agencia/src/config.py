@@ -35,3 +35,8 @@ BULLY_ATRASO_INICIAL = float(os.environ.get("BULLY_ATRASO_INICIAL", "1.5"))
 # Permite desligar a eleicao automatica (usado na suite de testes, para nao
 # disparar threads de rede nem escrever nos logs reais ao importar o app).
 BULLY_DESLIGADO = os.environ.get("BULLY_DESLIGADO", "") == "1"
+
+# Heartbeat da lider (Sprint 3, Parte B): intervalo entre verificacoes e
+# quantas falhas seguidas contam como "lider caiu".
+HEARTBEAT_INTERVALO = float(os.environ.get("HEARTBEAT_INTERVALO", "2"))
+HEARTBEAT_FALHAS = int(os.environ.get("HEARTBEAT_FALHAS", "2"))
