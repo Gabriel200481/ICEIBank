@@ -612,3 +612,85 @@ python auditoria.py
 registro `{"horaAuditoria": "...", "mensagem": {"idConta": 1, "valor": 35.0,
 "vetorEnvio": [3,0,0], "origemAgencia": 0}}` - capturado de forma
 independente do processamento normal feito pela Agência 1.
+
+---
+
+# RESPOSTAS - Sprint 3 (ICEIBank)
+
+## Declaração de uso de IA
+
+A declaração dos sprints anteriores continua valendo: o **Claude Code** (Anthropic) implementou a maior parte deste sprint (backend Python, app Flutter, testes, evidências e este arquivo) sob minha direção e revisão. Sou responsável por entender e defender qualquer trecho entregue; o que eu não conseguir explicar não deveria ter sido entregue como meu.
+
+## Escolha de linguagem e stack
+
+Mantidos **Python 3.13 + FastAPI** no backend (a seção 11 do roteiro permite adaptar o Bully para Python: `httpx` com `timeout=1`, `threading.Lock` no estado compartilhado, thread para o heartbeat). O app é **Flutter** (`http`, `shared_preferences`, `connectivity_plus`). Para o armazenamento local escolhi `shared_preferences` (chave-valor em arquivo) em vez de `sqflite`/`Hive`: o estado a guardar é pequeno (uma conta e uma fila curta), e isso evita um plugin nativo que dificultaria os testes. A persistência fica atrás de uma interface (`ArmazenamentoLocal`), então trocar por SQLite não mexe no resto.
+
+## Decisões de design
+
+- **Bully:** uma agência só pergunta aos IDs **maiores**; se nenhum responde, ela é a maior viva, assume e avisa todas. Se algum responde, esse assume a eleição e a agência espera o `coordenador`; se ele não anunciar a tempo (caiu no meio), ela recomeça. Só uma eleição por vez por agência, para a "tempestade" inicial não multiplicar trabalho.
+- **Heartbeat:** uma thread consulta `GET /bully/lider` da líder a cada `HEARTBEAT_INTERVALO` (2 s) com timeout de 1 s; só reelege após `HEARTBEAT_FALHAS` (2) falhas seguidas. A líder não faz heartbeat de si mesma.
+- **Rotas de Bully sem JWT:** são chamadas entre agências, não de usuário (mesmo raciocínio do consumidor de mensagens do Sprint 2).
+- **Sincronização, uma operação por chamada:** o app envia a fila em ordem; cada operação leva o `vetorBase` (versão da conta que o app viu). Dentro da mesma sincronização, a operação seguinte usa a versão devolvida pela anterior, porque depende causalmente dela.
+- **Quando é conflito:** `vetorBase` igual ou depois da versão da conta → aplica; **antes** (o servidor evoluiu) ou **concorrente** → HTTP 409, sem aplicar e devolvendo o estado atual.
+- **Offline-first só para depósito e saque.** Transferência exige conexão: mexe em duas contas, possivelmente em agências diferentes, e o mecanismo de sincronização trata uma conta por operação.
+- **Evidências em texto, não em imagem:** o ambiente de desenvolvimento não tinha emulador; o app foi validado por testes automatizados e por um cliente real contra as agências (`evidencias/sprint3/`).
+
+## Parte A - Perguntas (Seção 5.5)
+
+**1. Por que o Bully garante convergência para o maior ID vivo? O que acontece com duas eleições simultâneas?**
+
+Toda agência só se declara líder se **nenhuma de ID maior** respondeu. Se uma maior está viva, ela responde e conduz a eleição; repetindo o argumento, quem fica sem resposta de ninguém acima é, por definição, a de maior ID vivo, e é essa que envia `coordenador` para todas. Duas eleições simultâneas (a "tempestade" inicial) não conflitam: cada uma só empurra a decisão para IDs maiores, e todas terminam na mesma agência. No teste real, as 3 subiram quase juntas, as três registraram `ELEICAO_INICIADA` e as três terminaram reconhecendo a agência 2 (`evidencias/sprint3/eleicao-inicial.txt`). O código ainda impede duas eleições ao mesmo tempo **na mesma agência**.
+
+**2. Qual o custo em mensagens no pior caso e por que as rotas de Bully não exigem JWT?**
+
+No pior caso a agência de menor ID inicia: envia para os `n-1` maiores, cada uma dispara a própria eleição para os maiores que ela, e o total é da ordem de **O(n²)** mensagens, mais `n-1` de `coordenador`. Com 3 agências é desprezível; com muitas, é o ponto fraco do algoritmo. As rotas não usam JWT porque o JWT identifica um **usuário** e quem chama é outra agência; isso deixa a rota aberta a qualquer um que alcance a porta (por exemplo, forjar um `coordenador`). Em produção seria preciso autenticação entre serviços (mTLS ou token de serviço) e rede privada; aqui é uma limitação assumida.
+
+## Parte B - Perguntas (Seção 6.4)
+
+**1. Como escolher intervalo e timeout do heartbeat? Qual o risco de falso positivo?**
+
+É um compromisso: intervalo e timeout curtos detectam a queda mais rápido, mas qualquer lentidão passageira (GC, pico de CPU, rede) vira falsa queda e provoca reeleição desnecessária. Usei intervalo de 2 s, timeout de 1 s e exigi **2 falhas seguidas** antes de reeleger, então uma única resposta lenta não derruba a líder. No teste real (intervalo 1 s) a queda foi detectada em ~1-2 s (`failover-heartbeat.txt`). Falso positivo não corrompe nada aqui (a reeleição é segura e idempotente), só gera troca de líder e tráfego à toa.
+
+**2. O que acontece numa partição de rede (duas líderes)?**
+
+O Bully assume que quem não responde está **caído**, não isolado. Numa partição, cada lado elege o maior ID **do seu lado**, e ficam duas líderes ao mesmo tempo (split brain). Quando a rede volta, a agência de maior ID vivo percebe e todas convergem de novo para ela (foi o que vimos quando a agência 2 voltou). Entre a partição e a cura, nada impede decisões conflitantes; resolver isso exige quórum (Raft/Paxos), que o Bully não oferece.
+
+## Parte C - Perguntas (Seção 7.3)
+
+**Por que reconstruir a liderança a partir de logs e não de um estado central? Como os vetores ajudam a ordenar trocas?**
+
+Um estado central seria um ponto único de falha, justamente o que a eleição existe para evitar. Cada agência registra o que viu (`ELEICAO_INICIADA`, `NOVO_LIDER`, `LIDER_CAIU`) e o histórico é uma visão derivada, como o `mesclar_logs.py`. O custo: a mesma troca aparece até 3 vezes (uma por agência), então o script agrupa por líder e guarda quais agências a reconheceram. A ordem entre agências aqui vem da hora de parede (só leitura humana); os vetores gravados em cada evento permitem confirmar relações causais (a eleição da agência 1 vem depois do `LIDER_CAIU`), mas, como no Sprint 2, **não dão ordem total**: eventos concorrentes continuam concorrentes.
+
+## Parte D - Perguntas (Seção 8.3)
+
+**Por que o app consulta cada agência e não só uma? O que o usuário vê quando a agência que ele usa cai?**
+
+Se o painel perguntasse só a uma agência, a queda dela deixaria o painel cego justamente quando a informação é mais útil. Consultando as três, o app mostra quem está fora do ar e a líder em que as vivas concordam; durante a transição (a líder caiu e as vivas ainda dizem o nome dela) ele mostra **"Eleição em andamento"** em vez de uma líder que não responde mais. O app só considera consenso quando a líder indicada está viva. Para operações da conta, a agência da conta é fixa (`id % 3`): se ela cair, depósito e saque continuam funcionando offline (Parte F) e a transferência fica indisponível com aviso.
+
+## Parte E - Perguntas (Seção 9.6)
+
+**Por que o relógio vetorial detecta o conflito e o de Lamport não? O que fazer com uma operação em conflito?**
+
+Com Lamport, dois timestamps diferentes não dizem se os eventos têm relação causal ou são apenas concorrentes: só dá para ordenar. O vetor distingue: se o `vetorBase` do app é **menor ou igual** à versão do servidor em todas as posições e diferente, o servidor evoluiu sem o app saber (`ANTES`); se cada um tem alguma posição maior que o outro, mudaram sem se conhecer (`CONCORRENTES`). Ambos são conflito; só "igual" ou "depois" é seguro aplicar. A operação em conflito **não é aplicada nem descartada**: o servidor responde 409 com o estado atual e quem decide é o usuário (descartar ou reenviar sobre o novo estado). Descartar sozinho perderia a intenção do usuário; aplicar sozinho poderia somar sobre um saldo que ele nunca viu.
+
+## Parte F - Perguntas (Seção 10.3)
+
+**Por que UI otimista? O que fazer quando a operação otimista é rejeitada? Relação com consistência eventual.**
+
+Sem rede, esperar a confirmação travaria o app; a UI otimista mostra o efeito na hora (saldo = servidor + pendentes) e marca a operação como **Pendente**. Se o servidor recusar, a operação passa a **Conflito** ou **Rejeitada** (com a mensagem), deixa de contar no saldo e fica visível, para o usuário não achar que algo aconteceu quando não aconteceu. Isso é consistência eventual: durante a janela offline o app e o servidor divergem, e convergem quando a fila sincroniza; o preço é que a divergência pode terminar em conflito, que precisa de uma política (aqui, decisão do usuário), como discutido em Kleppmann (cap. 5, replicação). A idempotência por `idOperacao` garante que reenviar depois de uma resposta perdida não aplique duas vezes (testado).
+
+## Funcionalidade adicional - Sprint 3 (Seção 2.1)
+
+**Escolhida:** extrato por conta (`GET /contas/{id}/extrato`, JWT) e aba **Extrato** no app.
+
+**Por que essa:** não há tabela de transações; a fonte de verdade é o log de eventos de cada agência. O extrato é uma **visão derivada desse log**, o que mostra que o log guarda o necessário para reconstruir o histórico de uma conta. Inclui abertura, depósito, saque, transferências enviadas e recebidas (local e entre agências) e operações sincronizadas do app; conflitos ficam de fora porque nunca foram aplicados.
+
+**Evidência:** `evidencias/sprint3/funcionalidade-adicional.txt` (a soma dos movimentos confere com o saldo).
+
+## Limitações conhecidas
+
+- Estado em memória (Sprint 1): reiniciar uma agência perde as contas, o que afeta a sincronização e a mensageria.
+- Split brain numa partição de rede (Parte B).
+- Rotas de Bully sem autenticação entre serviços (Parte A).
+- Transferência não funciona offline (decisão acima).
+- A regressão não reexecutou o RabbitMQ real nem o frontend web em navegador real; ver README.

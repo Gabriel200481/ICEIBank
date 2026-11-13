@@ -22,12 +22,13 @@
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Pub%2FSub-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)
 ![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 ![Pytest](https://img.shields.io/badge/Pytest-testado-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter-App%20mobile-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 
 | Sprint | Unidade da ementa       | Tecnologia         | Conceito de Sistemas Distribuídos | Status         |
 | ------ | ------------------------ | ------------------- | ----------------------------------- | -------------- |
 | 1      | U2 - Desenvolvimento Web | API REST / MVC       | Relógio lógico de Lamport         | Concluída |
 | 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Concluída |
-| 3      | U4 - Desenvolvimento Móvel | App Flutter          | Consenso (eleição de líder)        | Não iniciada |
+| 3      | U4 - Desenvolvimento Móvel | App Flutter          | Consenso (eleição de líder - Bully) | Concluída |
 | 4      | U5 - Computação em Nuvem | Containers            | Transações distribuídas (2PC/Saga) | Não iniciada |
 
 **Sprint 1 - checklist de entrega** (seção 13 do roteiro):
@@ -57,6 +58,22 @@
 - [x] `RESPOSTAS.md` atualizado (seções 6.4, 7.5, 8.3 + funcionalidade adicional)
 - [x] Suite de testes automatizados rodando limpa (57 testes, incluindo integração real contra RabbitMQ)
 - [x] `evidencias/sprint2/` completa (4 prints de terminal reais)
+
+**Sprint 3 - checklist de entrega** (seção 12 do roteiro):
+
+- [x] Mensagens de eleição e coordenador implementadas e funcionando (Parte A)
+- [x] As 3 agências convergem para a mesma líder ao subir, mesmo com a "tempestade" de eleições inicial
+- [x] Heartbeat detectando a queda da líder e disparando reeleição automática (Parte B), sem intervenção manual
+- [x] Script `historico_lideranca.py` reconstruindo a linha do tempo de lideranças (Parte C)
+- [x] App Flutter com o fluxo bancário completo, reaproveitando a API já existente
+- [x] App Flutter com painel de liderança, atualizado automaticamente, incluindo o failover visível na tela
+- [x] Endpoint de sincronização no backend (Parte E), detectando conflito via relógio vetorial (409), não só o caminho feliz
+- [x] App Flutter em modo offline-first (Parte F): armazenamento local, fila de pendentes, UI otimista e sincronização automática ao reconectar
+- [x] O conflito de sincronização (HTTP 409) é tratado de forma visível no app
+- [x] JWT (testes automatizados), frontend web (não alterado; só usa `id`, `nomeAluno` e `saldo`, que não mudaram) e mensageria/relógio vetorial (testes de controller) sem regressão - limites descritos na seção Testes
+- [x] Funcionalidade adicional (extrato por conta, backend + app) implementada e documentada
+- [x] `evidencias/sprint3/` com 8 evidências (saídas reais de terminal/testes, ver o README da pasta)
+- [x] `RESPOSTAS.md` atualizado (seções 5.5, 6.4, 7.3, 8.3, 9.6 e 10.3 + funcionalidade adicional)
 
 ---
 
@@ -259,20 +276,27 @@ iceibank/
 │   │   │   ├── contas_controller.py
 │   │   │   ├── transferencias_controller.py
 │   │   │   ├── auth_controller.py
-│   │   │   └── status_controller.py
+│   │   │   ├── status_controller.py
+│   │   │   ├── bully_controller.py      (Sprint 3 - eleição)
+│   │   │   └── sync_controller.py       (Sprint 3 - sincronização offline-first)
 │   │   └── services/
 │   │       ├── vector_clock.py      (Sprint 2 - substitui lamport_clock.py)
 │   │       ├── mensageria.py        (Sprint 2 - publish/subscribe via RabbitMQ)
+│   │       ├── bully.py             (Sprint 3 - eleição de líder + heartbeat)
+│   │       ├── extrato.py           (Sprint 3 - funcionalidade adicional)
 │   │       ├── event_log.py
 │   │       └── auth_service.py
 │   ├── tests/                      (testes automatizados - pytest)
 │   ├── data/                       (logs gerados em tempo de execução - não versionado)
 │   ├── mesclar_logs.py
+│   ├── historico_lideranca.py       (Sprint 3 - linha do tempo de lideranças)
 │   └── auditoria.py                 (Sprint 2 - funcionalidade adicional)
 ├── frontend/                       (HTML/CSS/JS puro)
+├── mobile/                         (Sprint 3 - app Flutter, ver mobile/README.md)
 ├── evidencias/
 │   ├── sprint1/
-│   └── sprint2/
+│   ├── sprint2/
+│   └── sprint3/
 ├── RESPOSTAS.md
 ├── .gitignore
 └── README.md
@@ -302,11 +326,34 @@ Fluxo validado de ponta a ponta com RabbitMQ real (Docker local):
 5. `python auditoria.py` rodando em paralelo às agências → captura uma cópia de todo crédito publicado, de qualquer agência, via routing key coringa
 6. JWT e frontend testados novamente em navegador real - sem regressão
 
+### Sprint 3 (ver [evidencias/sprint3/](evidencias/sprint3/))
+
+Fluxo validado de ponta a ponta com as 3 agências reais e o app Flutter:
+
+1. Subir as 3 agências quase juntas → as três convergem para a **agência 2** (maior ID), mesmo com a tempestade de eleições
+2. Derrubar a líder → em ~1-2 s uma agência detecta pelo heartbeat, elege a **agência 1** e avisa a outra; o painel do app mostra a troca sozinho
+3. Subir a agência 2 de novo → ela retoma a liderança (maior ID vivo)
+4. `python historico_lideranca.py` → mandatos: 2 (queda detectada) → 1 (substituída) → 2 (em curso)
+5. App offline: depósito e saque entram na fila, o saldo muda na hora; ao reconectar a fila sincroniza sozinha
+6. Alterar a conta por outro aparelho enquanto o app está offline → ao reconectar, `POST /sincronizar` responde **409** e o app mostra o conflito com o estado do servidor (Descartar / Reenviar sobre o estado atual)
+
+Subir uma agência continua igual ao Sprint 2 (o `RABBITMQ_URL` segue obrigatório para o consumidor de mensagens); a eleição inicia sozinha ~1,5 s depois:
+
+```powershell
+$env:AGENCIA_ID=0; $env:RABBITMQ_URL="amqp://guest:guest@localhost:5672/"; python -m uvicorn src.app:app --port 4000
+```
+
+Variáveis novas (todas opcionais): `HEARTBEAT_INTERVALO` (s, padrão 2), `HEARTBEAT_FALHAS` (falhas seguidas até reeleger, padrão 2), `BULLY_ATRASO_INICIAL` (s, padrão 1.5), `BULLY_DESLIGADO=1` (desliga a eleição automática, usado nos testes).
+
+Rotas novas: `POST /bully/eleicao`, `POST /bully/coordenador`, `GET /bully/lider` (entre agências, sem JWT), `POST /sincronizar` e `GET /contas/{id}/extrato` (com JWT). As contas passaram a expor o campo `versao` (vetor da última alteração).
+
+App mobile: ver [mobile/README.md](mobile/README.md).
+
 ---
 
 ## Testes
 
-Cada peça é testada isoladamente (unitário) antes de ser integrada à API, e a integração é validada com as 3 agências rodando de verdade (requisições HTTP reais via `curl`/`Invoke-RestMethod`, e o frontend dirigido por um navegador real). **57 testes automatizados** (pytest) na Sprint 2 - a maioria roda sem precisar de infraestrutura externa (RabbitMQ é simulado via monkeypatch nos testes de controller); um pequeno grupo (`test_mensageria.py`, `test_auditoria.py`) valida publish/subscribe de ponta a ponta contra um broker real, pulado automaticamente se `RABBITMQ_URL` não estiver definida.
+Cada peça é testada isoladamente (unitário) antes de ser integrada à API, e a integração é validada com as 3 agências rodando de verdade (requisições HTTP reais via `curl`/`Invoke-RestMethod`, e o frontend dirigido por um navegador real). **120 testes automatizados** (pytest) e **62 testes do app** (`flutter test`) no Sprint 3 (57 de pytest no Sprint 2) - a maioria roda sem precisar de infraestrutura externa (RabbitMQ é simulado via monkeypatch nos testes de controller); um pequeno grupo (`test_mensageria.py`, `test_auditoria.py`) valida publish/subscribe de ponta a ponta contra um broker real, pulado automaticamente se `RABBITMQ_URL` não estiver definida.
 
 ```powershell
 cd agencia
@@ -315,7 +362,14 @@ pytest -v
 
 # para rodar tambem os testes de integracao com RabbitMQ real:
 $env:RABBITMQ_URL="amqp://guest:guest@localhost:5672/"; pytest -v
+
+# app Flutter
+cd ..\mobile
+flutter analyze
+flutter test
 ```
+
+**Limite da regressão do Sprint 3:** os testes que usam RabbitMQ real (`test_mensageria.py`, `test_auditoria.py`) foram **pulados** nesta validação, porque o ambiente usado não tinha broker. A mensageria e o relógio vetorial seguem cobertos pelos testes de controller (com o broker simulado) e a transferência entre agências por mensageria não foi reexecutada contra um RabbitMQ real neste sprint. O frontend web também não foi reaberto em navegador real neste sprint.
 
 ---
 
