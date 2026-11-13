@@ -1,0 +1,23 @@
+# Testes do app Flutter - inclui o failover do painel de lideranca
+
+$ flutter test --reporter expanded
+All tests passed!
+test/widgets_test.dart: Conta (fluxo bancario) agencia fora do ar mostra erro de conexao
+test/widgets_test.dart: Conta (fluxo bancario) conta inexistente oferece abrir conta
+test/widgets_test.dart: Conta (fluxo bancario) deposito atualiza o saldo
+test/widgets_test.dart: Conta (fluxo bancario) mostra o saldo
+test/widgets_test.dart: Conta (fluxo bancario) saque atualiza o saldo
+test/widgets_test.dart: Conta (fluxo bancario) saque maior que o saldo mostra o erro do servidor
+test/widgets_test.dart: Conta (fluxo bancario) transferencia chama a API com origem, destino e valor
+test/widgets_test.dart: Login agencias fora do ar mostra mensagem de conexao
+test/widgets_test.dart: Login login valido abre a tela principal
+test/widgets_test.dart: Login numero de conta invalido nao chama a API
+test/widgets_test.dart: Login senha invalida mostra erro e permanece no login
+test/widgets_test.dart: Painel de lideranca failover aparece na tela sem nenhuma acao do usuario
+test/widgets_test.dart: Painel de lideranca HomePage troca para a aba Lideranca
+test/widgets_test.dart: Painel de lideranca mostra a lider e as 3 agencias
+loading test/widgets_test.dart
+
+00:02 +33: All tests passed!
+
+# Painel acompanhando uma queda REAL da lider: evidencias/sprint3/flutter-fluxo-bancario.txt
