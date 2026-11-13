@@ -1,0 +1,45 @@
+# App Flutter (ApiClient real) contra 3 agencias reais: fluxo bancario + painel de lideranca com failover
+[21:36:46] login ok (token obtido)
+[21:36:46] conta aberta: Ana saldo=0.0 versao=[6, 2, 8]
+[21:36:46] deposito 200 -> saldo=200.0
+[21:36:46] saque 50 -> saldo=150.0
+[21:36:46] transferencia: Transferencia concluida (mesma agencia).
+[21:36:46] saldo conta 0 = 120.0; conta 3 = 30.0
+[21:36:46] extrato conta 0: Abertura de conta(0.0) | Deposito(200.0) | Saque(-50.0) | Transferencia enviada para a conta 3(-30.0)
+--- painel de lideranca por 36 s (1 leitura/s) ---
+[21:36:46] ag0:lider=2  ag1:lider=2  ag2:lider=2   <== lider agora: 2
+[21:36:47] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:48] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:49] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:50] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:51] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:52] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:53] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:54] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:55] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:56] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:57] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:36:58] ag0:lider=2  ag1:lider=2  ag2:FORA
+[21:36:59] ag0:lider=1  ag1:lider=1  ag2:FORA   <== lider agora: 1
+[21:37:00] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:01] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:02] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:03] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:04] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:05] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:06] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:07] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:08] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:09] ag0:lider=1  ag1:lider=1  ag2:FORA
+[21:37:10] ag0:lider=1  ag1:lider=1  ag2:lider=null
+[21:37:11] ag0:lider=2  ag1:lider=2  ag2:lider=2   <== lider agora: 2
+[21:37:12] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:37:13] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:37:14] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:37:15] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:37:16] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:37:17] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:37:18] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:37:19] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:37:20] ag0:lider=2  ag1:lider=2  ag2:lider=2
+[21:37:21] ag0:lider=2  ag1:lider=2  ag2:lider=2
