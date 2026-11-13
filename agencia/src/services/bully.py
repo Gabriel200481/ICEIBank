@@ -46,6 +46,19 @@ def enviar_http(agencias: list[dict], timeout: float = TIMEOUT_HTTP) -> Enviar:
     return enviar
 
 
+def ping_http(agencias: list[dict], timeout: float = TIMEOUT_HTTP) -> Callable[[int], bool]:
+    """Heartbeat: a agencia esta viva se responde 200 em GET /bully/lider."""
+    urls = {a["id"]: a["url"] for a in agencias}
+
+    def ping(id_destino: int) -> bool:
+        try:
+            return httpx.get(urls[id_destino] + "/bully/lider", timeout=timeout).status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    return ping
+
+
 def _em_thread(funcao: Callable[[], None]) -> None:
     threading.Thread(target=funcao, daemon=True).start()
 
@@ -60,6 +73,8 @@ class Bully:
         enviar: Enviar,
         espera_coordenador: float = 3.0,
         agendar: Callable[[Callable[[], None]], None] = _em_thread,
+        ping: Callable[[int], bool] | None = None,
+        falhas_para_eleicao: int = 2,
     ) -> None:
         self.id_agencia = id_agencia
         self.ids_agencias = ids_agencias
@@ -68,6 +83,11 @@ class Bully:
         self._enviar = enviar
         self._espera_coordenador = espera_coordenador
         self._agendar = agendar
+        self._ping = ping
+        self._falhas_para_eleicao = falhas_para_eleicao
+        self._falhas_consecutivas = 0
+        self._parar = threading.Event()
+        self._thread_heartbeat: threading.Thread | None = None
 
         self._lock = threading.Lock()
         self._lider_atual: int | None = None
@@ -146,3 +166,53 @@ class Bully:
         if self._definir_lider(lider_id):
             self.registro.registrar("NOVO_LIDER", ts, {"liderId": lider_id, "agencia": self.id_agencia})
         self._coordenador_recebido.set()
+
+    # ---- Heartbeat (Parte B) ----
+
+    def verificar_lider(self) -> None:
+        """Um ciclo do heartbeat: confere se a lider atual esta viva e, se
+        ela falhar `falhas_para_eleicao` vezes seguidas, dispara reeleicao.
+
+        Exigir mais de uma falha seguida evita eleicao por um unico timeout
+        causado por lentidao passageira (falso positivo).
+        """
+        lider = self.lider_atual
+        if lider is None:
+            self.iniciar_eleicao()
+            return
+        if lider == self.id_agencia or self._ping is None:
+            self._falhas_consecutivas = 0
+            return
+
+        if self._ping(lider):
+            self._falhas_consecutivas = 0
+            return
+
+        self._falhas_consecutivas += 1
+        if self._falhas_consecutivas < self._falhas_para_eleicao:
+            return
+
+        self._falhas_consecutivas = 0
+        ts = self.relogio.evento_local()
+        self.registro.registrar("LIDER_CAIU", ts, {"liderId": lider, "detectadoPor": self.id_agencia})
+        with self._lock:
+            # Sem lider conhecido enquanto a eleicao nao termina.
+            self._lider_atual = None
+        self.iniciar_eleicao()
+
+    def iniciar_heartbeat(self, intervalo: float) -> None:
+        if self._thread_heartbeat and self._thread_heartbeat.is_alive():
+            return
+        self._parar.clear()
+
+        def _laco() -> None:
+            while not self._parar.wait(intervalo):
+                self.verificar_lider()
+
+        self._thread_heartbeat = threading.Thread(target=_laco, daemon=True, name=f"heartbeat-agencia-{self.id_agencia}")
+        self._thread_heartbeat.start()
+
+    def parar_heartbeat(self) -> None:
+        self._parar.set()
+        if self._thread_heartbeat:
+            self._thread_heartbeat.join(timeout=2)

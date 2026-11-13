@@ -194,3 +194,97 @@ def test_rotas_bully_nao_exigem_jwt(cliente):
 
 def test_post_eleicao_com_corpo_invalido_retorna_422(cliente):
     assert cliente.post("/bully/eleicao", json={"origemId": "x"}).status_code == 422
+
+
+# ---- Heartbeat e reeleicao automatica (Parte B) ----
+
+def montar_com_ping(tmp_path, rede, id_agencia, falhas=2):
+    bully = montar(tmp_path, rede, id_agencia)
+    bully._ping = lambda destino: destino not in rede.fora and destino in rede.agencias
+    bully._falhas_para_eleicao = falhas
+    return bully
+
+
+def test_heartbeat_com_lider_viva_nao_dispara_eleicao(tmp_path, rede):
+    a0, a1, a2 = (montar_com_ping(tmp_path, rede, i) for i in IDS)
+    a2.iniciar_eleicao()
+    rede.chamadas.clear()
+    a0.verificar_lider()
+    a0.verificar_lider()
+    assert a0.lider_atual == 2
+    assert [c for c in rede.chamadas if c[2].startswith("/bully")] == []
+
+
+def test_uma_unica_falha_nao_dispara_eleicao(tmp_path, rede):
+    a0, a1, a2 = (montar_com_ping(tmp_path, rede, i) for i in IDS)
+    a2.iniciar_eleicao()
+    rede.fora.add(2)
+    a0.verificar_lider()  # 1a falha: ainda tolera
+    assert a0.lider_atual == 2
+
+
+def test_queda_da_lider_dispara_reeleicao_automatica(tmp_path, rede):
+    a0, a1, a2 = (montar_com_ping(tmp_path, rede, i) for i in IDS)
+    a2.iniciar_eleicao()
+    rede.fora.add(2)
+    a1.verificar_lider()
+    a1.verificar_lider()  # 2a falha seguida: reelege
+    assert a1.lider_atual == 1
+    assert a0.lider_atual == 1
+
+
+def test_falha_intermitente_zera_o_contador(tmp_path, rede):
+    a0, a1, a2 = (montar_com_ping(tmp_path, rede, i) for i in IDS)
+    a2.iniciar_eleicao()
+    rede.fora.add(2)
+    a0.verificar_lider()  # falha 1
+    rede.fora.discard(2)
+    a0.verificar_lider()  # respondeu: zera
+    rede.fora.add(2)
+    a0.verificar_lider()  # falha 1 de novo, nao 2
+    assert a0.lider_atual == 2
+
+
+def test_queda_registra_lider_caiu_no_log(tmp_path, rede):
+    a0, a1, a2 = (montar_com_ping(tmp_path, rede, i) for i in IDS)
+    a2.iniciar_eleicao()
+    rede.fora.add(2)
+    a1.verificar_lider()
+    a1.verificar_lider()
+    log = (tmp_path / "eventos-agencia-1.jsonl").read_text(encoding="utf-8")
+    assert "LIDER_CAIU" in log
+
+
+def test_lider_antiga_que_volta_retoma_a_lideranca(tmp_path, rede):
+    a0, a1, a2 = (montar_com_ping(tmp_path, rede, i) for i in IDS)
+    a2.iniciar_eleicao()
+    rede.fora.add(2)
+    a1.verificar_lider()
+    a1.verificar_lider()
+    assert a0.lider_atual == 1
+    rede.fora.discard(2)
+    a2.iniciar_eleicao()  # a 2 sobe de novo e se anuncia (maior ID)
+    assert {a0.lider_atual, a1.lider_atual, a2.lider_atual} == {2}
+
+
+def test_lider_nao_faz_heartbeat_de_si_mesma(tmp_path, rede):
+    a2 = montar_com_ping(tmp_path, rede, 2)
+    a2.iniciar_eleicao()
+    rede.chamadas.clear()
+    a2.verificar_lider()
+    assert rede.chamadas == []
+
+
+def test_sem_lider_conhecida_o_heartbeat_inicia_eleicao(tmp_path, rede):
+    a2 = montar_com_ping(tmp_path, rede, 2)
+    a2.verificar_lider()
+    assert a2.lider_atual == 2
+
+
+def test_thread_de_heartbeat_inicia_e_para(tmp_path, rede):
+    a2 = montar_com_ping(tmp_path, rede, 2)
+    a2.iniciar_eleicao()
+    a2.iniciar_heartbeat(0.01)
+    assert a2._thread_heartbeat.is_alive()
+    a2.parar_heartbeat()
+    assert not a2._thread_heartbeat.is_alive()
