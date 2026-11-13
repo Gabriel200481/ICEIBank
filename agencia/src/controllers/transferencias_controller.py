@@ -29,6 +29,7 @@ def transferir(body: TransferenciaBody, request: Request):
     # O debito e sempre local, pois esta agencia e a dona da conta de origem.
     ts_debito = estado.relogio.evento_local()
     conta_origem["saldo"] -= body.valor
+    conta_origem["versao"] = ts_debito
     estado.registro.registrar(
         "TRANSFERENCIA_DEBITO",
         ts_debito,
@@ -44,6 +45,7 @@ def transferir(body: TransferenciaBody, request: Request):
             raise HTTPException(status_code=404, detail="Conta de destino nao encontrada.")
         ts_credito = estado.relogio.evento_local()
         conta_destino["saldo"] += body.valor
+        conta_destino["versao"] = ts_credito
         estado.registro.registrar(
             "TRANSFERENCIA_CREDITO",
             ts_credito,

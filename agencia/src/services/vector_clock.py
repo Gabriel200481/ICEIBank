@@ -42,3 +42,21 @@ class RelogioVetorial:
                 self.vetor[i] = max(self.vetor[i], vetor_recebido[i])
             self.vetor[self.id_agencia] += 1
             return list(self.vetor)
+
+
+def comparar_vetores(v1: list[int], v2: list[int]) -> str:
+    """Funcao pura (sem efeitos colaterais nem rede).
+
+    ANTES: v1 aconteceu antes de v2 (v1 <= v2 em toda posicao).
+    DEPOIS: v2 aconteceu antes de v1. IGUAIS: mesmo vetor.
+    CONCORRENTES: nenhum domina o outro.
+    """
+    v1_menor_ou_igual = all(v1[i] <= v2[i] for i in range(len(v1)))
+    v2_menor_ou_igual = all(v2[i] <= v1[i] for i in range(len(v1)))
+    if v1_menor_ou_igual and v2_menor_ou_igual:
+        return "IGUAIS"
+    if v1_menor_ou_igual:
+        return "ANTES"
+    if v2_menor_ou_igual:
+        return "DEPOIS"
+    return "CONCORRENTES"

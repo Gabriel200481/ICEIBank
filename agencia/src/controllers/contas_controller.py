@@ -27,7 +27,7 @@ def criar_conta(body: CriarContaBody, request: Request):
         raise HTTPException(status_code=409, detail="Conta ja existe.")
 
     ts = estado.relogio.evento_local()
-    estado.contas[body.id] = {"id": body.id, "nomeAluno": body.nomeAluno, "saldo": body.saldoInicial}
+    estado.contas[body.id] = {"id": body.id, "nomeAluno": body.nomeAluno, "saldo": body.saldoInicial, "versao": ts}
     estado.registro.registrar(
         "CRIAR_CONTA", ts, {"id": body.id, "nomeAluno": body.nomeAluno, "saldoInicial": body.saldoInicial}
     )
@@ -51,6 +51,7 @@ def depositar(id_conta: int, body: ValorBody, request: Request):
 
     ts = estado.relogio.evento_local()
     conta["saldo"] += body.valor
+    conta["versao"] = ts
     estado.registro.registrar("DEPOSITO", ts, {"id": id_conta, "valor": body.valor, "novoSaldo": conta["saldo"]})
     return conta
 
@@ -66,5 +67,6 @@ def sacar(id_conta: int, body: ValorBody, request: Request):
 
     ts = estado.relogio.evento_local()
     conta["saldo"] -= body.valor
+    conta["versao"] = ts
     estado.registro.registrar("SAQUE", ts, {"id": id_conta, "valor": body.valor, "novoSaldo": conta["saldo"]})
     return conta

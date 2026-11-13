@@ -8,6 +8,8 @@ algo que o relogio de Lamport (Sprint 1), sozinho, nunca garantiria.
 import json
 from pathlib import Path
 
+from src.services.vector_clock import comparar_vetores  # noqa: F401 (reexportada)
+
 PASTA_DADOS = Path(__file__).resolve().parent / "data"
 
 
@@ -25,21 +27,6 @@ def imprimir_linha_do_tempo(eventos: list[dict]) -> None:
     for evento in eventos:
         detalhes = json.dumps(evento["detalhes"], ensure_ascii=False)
         print(f"[{evento['agencia']}] vetor={evento['timestampVetorial']} {evento['tipo']} {detalhes}")
-
-
-def comparar_vetores(v1: list[int], v2: list[int]) -> str:
-    """ANTES: v1 aconteceu antes de v2 (v1 <= v2 em toda posicao).
-    DEPOIS: v2 aconteceu antes de v1. CONCORRENTES: nenhum domina o outro.
-    """
-    v1_menor_ou_igual = all(v1[i] <= v2[i] for i in range(len(v1)))
-    v2_menor_ou_igual = all(v2[i] <= v1[i] for i in range(len(v1)))
-    if v1_menor_ou_igual and v2_menor_ou_igual:
-        return "IGUAIS"
-    if v1_menor_ou_igual:
-        return "ANTES"
-    if v2_menor_ou_igual:
-        return "DEPOIS"
-    return "CONCORRENTES"
 
 
 def encontrar_pares_concorrentes(eventos: list[dict]) -> list[tuple[dict, dict]]:
