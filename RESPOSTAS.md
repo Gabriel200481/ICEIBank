@@ -765,3 +765,124 @@ Extras: `app-conflito-409.png` (tarefa 5 da seção 10.2: o app mostra o 409 de 
 - Rotas de Bully sem autenticação entre serviços (Parte A).
 - Transferência não funciona offline (Parte F).
 - A aba Extrato do app carrega ao ser criada e não se atualiza sozinha: se for aberta antes de a conta existir, mostra "Conta não encontrada" até tocar em "Tentar de novo" (observado durante os prints).
+
+---
+
+# RESPOSTAS - Sprint 4 (ICEIBank)
+
+## Declaração de uso de IA
+
+A declaração dos sprints anteriores continua valendo: o **Claude Code** (Anthropic) implementou a maior parte deste sprint (backend, testes, Dockerfile, compose, Lambdas e este arquivo) sob minha direção e revisão. Sou responsável por entender e defender qualquer trecho entregue.
+
+O código de exemplo do roteiro é Node/Express; como o backend é **Python/FastAPI**, o protocolo foi **portado**, não copiado (seção 11 do roteiro). Os testes automatizados e os cenários de falha rodaram contra o código Python.
+
+## O que foi e o que não foi executado de verdade
+
+| Parte | Estado |
+|---|---|
+| Persistência, 2PC, Bully com token, `transacoes.py` | Implementados em Python e testados: 156 testes `pytest` e `agencia/cenarios_falha.py` (3 agências **reais**, em 3 processos, com quedas injetadas) |
+| Imagens Docker, `docker compose up`, volumes, `restart: on-failure`, healthcheck | **Escritos, mas não executados**: o Docker Desktop não estava em execução na máquina de desenvolvimento. O `restart: on-failure` foi imitado por um supervisor dentro de `cenarios_falha.py` |
+| LocalStack (SNS, SQS, Lambda, S3, DynamoDB, API Gateway), `init.sh` | **Não executados** (exigem o token do LocalStack e o Docker). O código das duas Lambdas e da publicação no SNS foi testado com clientes falsos (`tests/test_nuvem.py`); `init.sh` e os `awslocal apigateway ...` nunca rodaram |
+| Prints de `evidencias/sprint4/` | **Pendentes**: dependem de Docker e LocalStack. Não foram fabricados |
+
+## Decisões de design e desvios em relação ao roteiro
+
+- **Python em vez de Node.** Estado em `src/services/armazenamento.py` (`EstadoDuravel`), com `threading.RLock`: o FastAPI atende cada requisição em uma thread, então `preparar`, `decidir` e `salvar()` precisam de exclusão mútua (o aviso da seção 11).
+- **`estado.json` único por agência** com contas, operações de sincronização e estados do 2PC, gravado por `tmp` + `fsync` + `os.replace`. O log de eventos (`.jsonl`) continua separado, no mesmo `DATA_DIR`.
+- **Saque recusado continua HTTP 400** (o roteiro cita 422). Mantive 400 para não quebrar o frontend e o app Flutter, que já tratam esse código. A transferência abortada devolve **422**, como o roteiro pede, com `detail` (o frontend e o app já leem `detail`) e `mensagem` no 200.
+- **`GET /contas/{id}`** passou a devolver também `reservado` e `disponivel`; a criação de conta não mudou (os testes antigos continuam valendo).
+- **Extrato (Sprint 3):** o extrato deriva do log de eventos, então ensinei-o a ler `2PC_COMMIT_APLICADO`; sem isso, transferências feitas pelo 2PC sumiriam do extrato (regressão silenciosa).
+- **Mensageria (Sprint 2):** o consumidor do RabbitMQ continua no código, mas só sobe se `RABBITMQ_URL` estiver definida (no compose não há RabbitMQ). A transferência **não usa mais** a fila: usa o 2PC.
+- **Token interno** em `/bully/eleicao`, `/bully/coordenador` e `/2pc/*`; sem `TOKEN_INTERNO` configurado, essas rotas recusam tudo (falha fechada). `GET /bully/lider` e `GET /saude` ficam públicos.
+- **Bully:** `receber_coordenador` rejeita líder de id menor que o da própria agência e dispara eleição (seção 6.4).
+- **Funcionalidade adicional (seção 2.1):** (1) **timeouts configuráveis** por variável de ambiente (`TIMEOUT_2PC`, `INTERVALO_REENTREGA`, `INTERVALO_RESOLUCAO`; o compose as repassa) e (2) **`GET /saude`** público, usado no `healthcheck` do compose. Foram usadas nos cenários de falha (reentrega de 1 s ou 60 s conforme o cenário).
+- **Lambdas em Python** (a linguagem do backend): `serverless/gerar-comprovante` e `serverless/consultar-comprovante` (`GET /comprovantes/{txId}` via API Gateway). O DynamoDB não aceita `float`: o valor é convertido para `Decimal` (sem isso, toda mensagem iria para `batchItemFailures` para sempre).
+- **Comprovantes só com SNS ativo** (`SNS_TOPIC_ARN`); publicação em thread própria, timeout de 2 s, sem retentativas e sem levantar exceção para o coordenador.
+
+## Parte A - Perguntas (Seção 5.10)
+
+**1. Por que gravar em um temporário e renomear?** Uma escrita direta no arquivo definitivo é um truncar-e-reescrever: se a agência cai no meio, sobra um JSON cortado (ou vazio) e a agência perde **todo** o estado, inclusive promessas de votos SIM. Com `tmp` + `fsync` + `os.replace`, o arquivo definitivo é sempre ou o estado antigo inteiro ou o novo inteiro (o rename é atômico); o `fsync` garante que o conteúdo do temporário já está no disco antes da troca.
+
+**2. Sem o volume?** `docker compose down` + `up` recria os containers e o disco efêmero some: as contas desaparecem (voltamos ao problema do Sprint 2). No meio de um 2PC, um participante que perdeu o disco esquece as **promessas** (reservas e votos SIM). O coordenador pode ter decidido COMMIT contando com um SIM que ninguém lembra: o participante responderia "transação desconhecida" ao COMMIT (aqui, HTTP 409) e o débito/crédito jamais seria aplicado, quebrando a atomicidade. Por isso o estado fica em volume.
+
+**3. O vetor não persistido viola a causalidade?** Sim, nos logs. Cenário: a agência 0 registra um evento com vetor `[5,0,0]`, envia uma mensagem à agência 1 (que passa a `[5,1,0]`), reinicia e o vetor volta a `[0,0,0]`; o próximo evento da 0 é `[1,0,0]`, que o `mesclar_logs.py` julgará **anterior** ao `[5,0,0]` e **concorrente/anterior** ao evento da agência 1, embora tenha acontecido depois. (Nos logs dos cenários de falha se vê isso: após cada queda os vetores recomeçam.) Correção simples: persistir o vetor junto com o estado (a cada `ao_enviar`/`evento_local`) ou, ao subir, reconstruí-lo pelo máximo do que está no log de eventos.
+
+**4. Limites do token interno.** É um segredo estático e compartilhado: quem o descobrir (log, variável de ambiente, cópia do `.env`) passa a ser qualquer agência e pode chamar `/2pc/decidir`; não há identidade por agência, nem expiração, nem rotação, e o tráfego é HTTP sem criptografia (o token trafega em claro). Mais robusto: TLS mútuo (cada agência com seu certificado), rede privada/overlay onde só as agências se enxergam (as portas 4000-4002 não precisariam estar expostas ao host), e tokens por agência com escopo e expiração.
+
+## Parte B - Perguntas (Seção 6.6)
+
+**1. Por que gravar a promessa antes de responder SIM?** O SIM é um compromisso: "eu consigo aplicar quando você mandar". Se a resposta saísse antes da gravação e a agência caísse entre as duas coisas, o coordenador teria um SIM que o participante não lembra: ao reiniciar, ele não tem reserva nem registro, e pode aceitar outro débito do mesmo dinheiro ou responder "desconhecida" ao COMMIT. Gravando antes, no pior caso o participante lembra de uma promessa que o coordenador nunca recebeu (cenário 2), e isso se resolve consultando o coordenador.
+
+**2. Idempotência.** Aplicar a mesma mensagem duas vezes produz o mesmo estado que aplicá-la uma. A rede pode duplicar (retransmissão após timeout) ou o coordenador pode reenviar a decisão porque não recebeu a confirmação; sem idempotência, um COMMIT repetido debitaria duas vezes. Aqui é garantida pela chave `txId:tipo` e pelo estado (`PREPARADO` → `COMMITADO`/`ABORTADO`); só se aplica a partir de `PREPARADO`.
+
+**3. Por que não abortar sozinho por timeout?** Porque o coordenador pode já ter decidido COMMIT (e outro participante pode já ter aplicado). Se este abortasse por conta própria, haveria um débito sem crédito, ou o contrário. Só o coordenador sabe a decisão; o participante em dúvida tem de perguntar (`GET /2pc/status/{txId}`), e esse é o custo do 2PC (o bloqueio).
+
+**4. Por que reservar na fase 1?** Para que o SIM seja verdadeiro até a decisão. Sem a reserva, duas transferências simultâneas de 60 de uma conta com 100 votariam SIM, e na fase 2 a segunda deixaria o saldo negativo. Com a reserva, a segunda vê `disponivel = 40` e vota NAO (coberto por `test_duas_transferencias_simultaneas_nao_gastam_o_mesmo_dinheiro`).
+
+## Parte C - Perguntas (Seção 7.4)
+
+**1. Decisão em disco antes de comunicar.** Se o coordenador comunicasse primeiro e caísse antes de gravar, um participante poderia ter aplicado COMMIT enquanto o coordenador, ao voltar, não tem decisão e aplica o aborto presumido: inconsistência. Gravando antes, quem voltar sabe o que foi decidido (cenário 4: o COMMIT sobrevive à queda).
+
+**2. Por que o aborto presumido é seguro (e COMMIT presumido não).** Se a transação ainda estava na fase 1, nenhuma decisão foi tomada, logo ninguém recebeu COMMIT nem aplicou nada: abortar apenas libera reservas. Presumir COMMIT seria afirmar algo que talvez nem todos tenham prometido (um participante pode ter votado NAO ou nem ter respondido) e aplicaria um débito sem poder garantir o crédito.
+
+**3. Coordenador e participante ao mesmo tempo.** Não é problema: as chamadas são as mesmas rotas HTTP, mesmo para si (a líder chama o próprio `/2pc/preparar`), e a chave `txId:tipo` separa o débito do crédito quando as duas contas estão na mesma agência. Os travamentos não ocorrem porque `preparar`/`decidir` seguram o `RLock` só durante a operação em memória + gravação, nunca durante uma chamada de rede. Coberto em `test_transferencia_mesma_agencia_participa_duas_vezes`.
+
+**4. Sprint 2 x 2PC.** No Sprint 2 o débito era aplicado e só depois se publicava a mensagem: uma queda ou conta inexistente entre as duas etapas fazia o dinheiro sumir. O 2PC garante **atomicidade**: ou as duas operações se aplicam, ou nenhuma (inclusive conta de destino inexistente: o crédito vota NAO e o débito nem é aplicado). O custo: mais mensagens e **latência** (duas voltas de rede mais gravações em disco por transferência) e **disponibilidade** menor: qualquer agência fora do ar aborta a transferência, e a queda do coordenador deixa reservas presas (cenário 5).
+
+## Parte D - Cenários de falha (Seção 8)
+
+Executados com `python agencia/cenarios_falha.py` (3 agências reais, uma por processo, estado em disco, supervisor imitando `restart: on-failure`). Em cada cenário o script verifica o invariante: soma dos saldos igual a 3000 e nenhuma reserva presa. O resultado completo está em `evidencias/sprint4/cenarios-falha.txt`.
+
+Execução final: **todas as verificações passaram** (`RESULTADO: TODOS OS CENARIOS OK`). Nos cenários 2 e 3 a reentrega do coordenador foi ajustada para 60 s, de modo que o **único** caminho para sair da dúvida fosse o participante consultar o coordenador (nos demais ela é de 1 s). As saídas abaixo vêm dos logs das agências.
+
+| Cenário | O que fiz | Esperado | Observado | Invariante |
+|---|---|---|---|---|
+| Base | Transferência 0→1 de 100 pelo cliente falando com a agência 0 (a líder é a 2) | COMMIT nas duas agências | `200 COMMIT`; saldos 900/1100; a líder registrou `2PC_PREPARAR_ENVIADO`, `2PC_DECISAO_COMMIT`, `2PC_DECISAO_ENVIADA`, `2PC_CONCLUIDA` | soma 3000, reservas 0 |
+| Abort | Saldo insuficiente (99999) e destino inexistente (conta 99) | ABORT sem efeito | `422` "Saldo insuficiente."; com destino 99 o **débito não foi aplicado** (no Sprint 2 era o caso em que o dinheiro sumia) | soma 3000, reservas 0 |
+| 1. Participante fora do ar | `stop` da agência 1 e transferência 0→1 | ABORT por timeout | `422`; log `2PC_VOTO_TIMEOUT` na líder (`{'agencia': 1}`) | soma 3000, reservas 0 |
+| 2. Cai depois de votar | `FALHA_2PC=participante-apos-votar` na agência 1; transferência 1→0 (débito na agência que cai) | Líder conta NAO e decide ABORT; a agência 1 volta em dúvida e consulta | `[FALHA INJETADA] participante-apos-votar: derrubando a agencia 1 agora`; na líder `2PC_VOTO_TIMEOUT`; o supervisor reiniciou a agência (`quedas=1`) e ela registrou `2PC_RESOLVIDA_POR_CONSULTA ... 'decisao': 'ABORT'` | soma 3000, reservas 0 |
+| 3. Coordenador cai antes de decidir | `FALHA_2PC=coordenador-antes-de-decidir` na líder (agência 2); transferência 0→1 | Participantes com a reserva presa; a líder volta e aborta | cliente recebeu `503`; `[FALHA INJETADA] coordenador-antes-de-decidir`; ao voltar a líder registrou `2PC_ABORTO_PRESUMIDO`; os participantes consultaram e receberam ABORT | soma 3000, reservas 0 |
+| 4. Coordenador cai depois de decidir COMMIT | `FALHA_2PC=coordenador-apos-decidir` na líder; transferência 0→1 | A decisão sobrevive e é entregue | cliente recebeu `503`, mas os saldos foram de 900/1100 para **800/1200**: a transferência se completou depois | soma 3000, reservas 0 |
+| 5. Bloqueio | Como o 3, mas com `stop` da agência 2 assim que cai (ela não volta) | Participantes bloqueados | `2PC_BLOQUEADA_AGUARDANDO_COORDENADOR {'coordenador': 2}` na agência 0; `GET /contas/0` com `saldo 800, reservado 100, disponivel 700`; o participante continua `PREPARADO` depois de várias tentativas; um saque que incluía o valor reservado foi recusado. Ao subir a agência 2: aborto presumido e `2PC_RESOLVIDA_POR_CONSULTA ... ABORT`, reserva liberada | soma 3000, reservas 0 |
+
+Observações honestas:
+
+- **Cenário 4 expõe um problema real de API:** a mensagem de 503 dizia "Nada foi aplicado; tente novamente", o que seria falso (e perigoso: repetir duplicaria a transferência). Foi o que a execução mostrou; corrigi o texto para "o resultado será resolvido sozinho: confira os saldos antes de tentar de novo". A solução de verdade está na pergunta 3 abaixo.
+- **Corrida inofensiva na base:** em uma das execuções, um participante registrou `2PC_RESOLVIDA_POR_CONSULTA` para a transação base (`97344da0`), na mesma hora em que o coordenador entregava a decisão (provável corrida entre a consulta periódica e a entrega). Como `decidir` é idempotente, o efeito foi aplicado uma vez só.
+- **Saque recusado vem como HTTP 400**, não 422 (decisão registrada acima).
+- Os saldos em cada cenário são cumulativos (o script não zera o estado entre cenários, só confere o invariante).
+- O cenário do Docker (`docker compose stop agencia-1` etc.) **não foi executado**: o script reproduz os mesmos pontos de falha com processos reais; refazer com o Docker e tirar os prints é o que falta.
+
+### Perguntas (Seção 8.7)
+
+**1. Cenário 2: por que a promessa em disco não gera inconsistência?** Porque a decisão é do coordenador, não do participante. O coordenador não recebeu o voto (a agência caiu antes de responder), contou como NAO e decidiu ABORT; o SIM gravado no participante é só uma promessa pendente, que "vence" quem decide: o coordenador. Ao voltar, o participante vê a promessa em `PREPARADO`, pergunta `GET /2pc/status/{txId}` ao coordenador, recebe `ABORT` e libera a reserva (log `2PC_RESOLVIDA_POR_CONSULTA`).
+
+**2. Cenário 5: safety ou liveness?** É falha de **liveness** (progresso/disponibilidade). Nada de errado é feito (a segurança é preservada: ninguém aplica metade da transferência, a soma dos saldos não muda e o dinheiro reservado não pode ser gasto), mas o sistema **não progride** enquanto o coordenador está fora: os participantes ficam bloqueados, com o dinheiro preso, sem poder decidir sozinhos. O 2PC escolhe segurança em vez de disponibilidade.
+
+**3. Cenário 4: o cliente recebeu erro, mas a transferência aconteceu. É aceitável?** Para um banco não é aceitável como está, porque a reação natural do cliente (tentar de novo) duplicaria a transferência. Observei exatamente isso: o 503 chega, e instantes depois o COMMIT é entregue. Mitigação mínima feita: a mensagem de 503 agora diz que o resultado será resolvido sozinho e para conferir o saldo. O correto: a API aceitar um **`idempotencyKey`/`txId` gerado pelo cliente** (a repetição do mesmo pedido devolve o resultado da primeira, em vez de criar outra transferência) e expor a **consulta do resultado por `txId`** (o comprovante da Parte F faz isso, mas só depois de a nuvem processá-lo; o `GET /2pc/status/{txId}` é interno).
+
+**4. A líder cai e o Bully elege outra: quem resolve as transações em andamento?** O código não cobre. A recuperação (aborto presumido, reentrega) é executada pelo **mesmo** processo da coordenadora quando ela **volta** (`recuperar()` e `reentregar_pendentes()` olham o estado dela, em disco). Quem assume a liderança não tem esse estado (ele está no volume da líder antiga) e, se perguntado sobre o `txId`, responderia ABORT por desconhecimento (aborto presumido), **mesmo que a antiga já tivesse decidido COMMIT**: um risco real de inconsistência. Os participantes em dúvida continuam perguntando à coordenadora original (`p["coordenador"]`), então ficam bloqueados até ela voltar. Faltaria: replicar o log de decisões do coordenador (Paxos/Raft, ou ao menos um log compartilhado) e permitir que a nova líder assuma e conclua as transações pendentes.
+
+## Parte E - Observabilidade (Seção 9)
+
+`python agencia/transacoes.py` (com `TOKEN_INTERNO` no ambiente) consulta `/2pc/transacoes` das 3 agências. Depois de uma transferência bem-sucedida: a líder mostra `[coordenador] ... estado=CONCLUIDA decisao=COMMIT`, e as duas agências das contas mostram `[participante] ... estado=COMMITADO` (um `DEBITO` e um `CREDITO`). No bloqueio (cenário 5): os participantes mostram `PREPARADO` (em dúvida), o coordenador aparece `fora do ar` e, quando volta, mostra a transação `DECIDIDA` com `decisao=ABORT` (aborto presumido), até a reentrega concluí-la.
+
+### Perguntas (Seção 9.3)
+
+**1. O estado só cresce: é problema? Que política de limpeza?** Num sistema real é: o arquivo de estado é reescrito inteiro a cada mudança, então o custo de cada gravação cresce com o histórico. Política: remover transações `CONCLUIDA` (coordenador) e `COMMITADO`/`ABORTADO` (participante) depois de uma janela de retenção, mantendo o histórico no log/arquivo morto. Cuidado com o aborto presumido: o coordenador **não pode esquecer** uma transação ainda não confirmada por todos (se esquecer e um participante ainda em dúvida perguntar, a resposta "desconhecida = ABORT" seria errada para um COMMIT que ele não aplicou). Só se apaga o que todos os participantes já confirmaram (`CONCLUIDA`).
+
+**2. Onde o vetor ajuda mais que o horário de parede?** Quando os relógios físicos das agências divergem (ou apenas porque o log de uma agência registra o evento antes do da outra por milissegundos): o vetor mostra a ordem **causal** real. Por exemplo, em `2PC_DECISAO_ENVIADA` (líder) e `2PC_ABORT_APLICADO` (participante), o vetor do participante domina o da líder, provando que a aplicação foi consequência do envio, e dois eventos com vetores incomparáveis (ex.: dois participantes votando ao mesmo tempo) são de fato concorrentes. O horário não distingue "aconteceu depois por causa de" de "aconteceu depois por coincidência". Limite observado: como o vetor não é persistido, o recomeço após uma queda reinicia a contagem (Parte A, pergunta 3).
+
+## Parte F - Perguntas (Seção 10.7)
+
+(Código testado só com clientes falsos; LocalStack e AWS real não foram executados; veja a tabela do início.)
+
+**1. Idempotência da Lambda.** Em `serverless/gerar-comprovante/lambda_function.py`, o `put_item` usa `ConditionExpression="attribute_not_exists(txId)"` e ignora `ConditionalCheckFailedException`; o `put_object` no S3 sobrescreve a mesma chave `comprovantes/{txId}.json`, então regravar não duplica nada. Cenário: o SQS entrega a mensagem, a Lambda processa e grava, mas cai (ou excede o tempo) antes de o SQS receber a confirmação de exclusão; passado o *visibility timeout* a mensagem é entregue de novo. Coberto por `test_gerar_comprovante_e_idempotente_na_reentrega`.
+
+**2. Por que `batchItemFailures`.** Se a função lançasse uma exceção, o SQS consideraria **o lote inteiro** com falha e reentregaria todas as mensagens, inclusive as já processadas (reprocessamento desnecessário e, para sorte nossa, inofensivo graças à idempotência). Com `batchItemFailures`, só os `messageId` listados voltam à fila. Coberto por `test_so_a_mensagem_que_falha_volta_para_a_fila`.
+
+**3. Cair entre decidir e publicar.** Não é aceitável para um sistema que promete comprovante de toda transferência. Padrão **outbox**: no mesmo `salvar()` atômico que grava a decisão, gravar também o evento a publicar em uma lista `outbox` do estado; uma tarefa periódica (como a `reentregar_pendentes`) publica o que está no outbox e só apaga o item depois de o SNS confirmar. Na recuperação, o que sobrou no outbox é publicado de novo (entrega "pelo menos uma vez", e a Lambda já é idempotente). Não implementado neste sprint.
+
+**4. Containers x serverless.** Containers (coordenação): mantêm estado e conexões, latência previsível, bom para o 2PC (que precisa de disco, de reentrega periódica e de processo longo), porém custam enquanto estão ligados e escalam manualmente. Serverless (comprovante): escala sozinho e a custo por invocação, ótimo para trabalho curto, sem estado e disparado por evento; em contrapartida tem partida a frio, tempo máximo de execução e nenhum disco/estado local confiável. O 2PC seria má ideia numa função: o coordenador precisa gravar a decisão de forma durável, sobreviver a quedas e continuar reentregando por tempo indeterminado, e uma função efêmera (que pode ser encerrada a qualquer momento e é invocada de forma duplicada) não oferece nada disso.
+
+**5. Onde a AWS real difere.** Permissões (IAM): o LocalStack aceita qualquer papel/credencial; na AWS real, sem permissão de `s3:PutObject`, `dynamodb:PutItem` e `sqs:*` para o papel da função, tudo falharia com `AccessDenied`. Limites e latência: partida a frio da Lambda, limites de concorrência/payload, SNS/SQS com atraso real e reentregas mais frequentes; o API Gateway real exige *stage*/URLs diferentes. Custos: cobrança por requisição, armazenamento e tráfego, inexistentes localmente.

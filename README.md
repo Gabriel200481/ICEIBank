@@ -29,7 +29,7 @@
 | 1      | U2 - Desenvolvimento Web | API REST / MVC       | Relógio lógico de Lamport         | Concluída |
 | 2      | U3 - Comunicação indireta | Mensageria / Pub-Sub | Relógio vetorial                   | Concluída |
 | 3      | U4 - Desenvolvimento Móvel | App Flutter          | Consenso (eleição de líder - Bully) | Concluída |
-| 4      | U5 - Computação em Nuvem | Containers            | Transações distribuídas (2PC/Saga) | Não iniciada |
+| 4      | U5 - Computação em Nuvem | Containers + LocalStack | Transações distribuídas (2PC) | Código pronto; evidências (prints) e execução no Docker pendentes |
 
 **Sprint 1 - checklist de entrega** (seção 13 do roteiro):
 
@@ -74,6 +74,28 @@
 - [x] Funcionalidade adicional (extrato por conta, backend + app) implementada e documentada
 - [x] `evidencias/sprint3/` com os 8 prints `.png` do roteiro (terminal e app em emulador), registros em texto e a regressão (ver o README da pasta)
 - [x] `RESPOSTAS.md` atualizado (seções 5.5, 6.4, 7.3, 8.3, 9.6 e 10.3 + funcionalidade adicional)
+
+---
+
+**Sprint 4 - como rodar** (containers, 2PC e nuvem local):
+
+```powershell
+Copy-Item .env.example .env          # ajuste TOKEN_INTERNO (e LOCALSTACK_AUTH_TOKEN, para a Parte F)
+docker compose up --build            # 3 agencias em containers, com volumes (estado em /dados)
+$env:TOKEN_INTERNO = "troque-este-segredo"; python agencia/transacoes.py   # estado do 2PC em cada agencia
+
+# Parte F (nuvem local): empacota as Lambdas, sobe o LocalStack e cria os recursos
+New-Item -ItemType Directory -Force -Path serverless/build | Out-Null
+Compress-Archive -Path serverless/gerar-comprovante/lambda_function.py -DestinationPath serverless/build/gerar-comprovante.zip -Force
+Compress-Archive -Path serverless/consultar-comprovante/lambda_function.py -DestinationPath serverless/build/consultar-comprovante.zip -Force
+docker compose --profile nuvem up --build -d
+docker compose exec localstack sh /scripts/init.sh
+
+# cenarios de falha da Parte D sem Docker (3 processos reais + supervisor que imita restart: on-failure)
+python agencia/cenarios_falha.py
+```
+
+Transferências passam pelo **Two-Phase Commit**: a líder eleita pelo Bully coordena; as agências das duas contas participam (reserva de fundos no débito, voto e decisão gravados em disco). Rotas internas (`/bully/eleicao`, `/bully/coordenador`, `/2pc/*`) exigem o cabeçalho `x-token-interno`; `GET /bully/lider` e `GET /saude` continuam públicos. Detalhes, cenários de falha e respostas em [RESPOSTAS.md](RESPOSTAS.md).
 
 ---
 
