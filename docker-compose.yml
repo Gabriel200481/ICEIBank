@@ -1,0 +1,63 @@
+services:
+  agencia-0:
+    build: ./agencia
+    environment: &comum
+      AGENCIA_ID: "0"
+      FALHA_2PC: "${FALHA_2PC_0:-}"
+      TOKEN_INTERNO: ${TOKEN_INTERNO:?defina TOKEN_INTERNO no arquivo .env}
+      PORTA_BASE: "4000"
+      AGENCIAS_HOSTS: agencia-0,agencia-1,agencia-2
+      # Nuvem local (Parte F). Com SNS_TOPIC_ARN vazio, a agencia nao publica eventos.
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      SNS_TOPIC_ARN: ${SNS_TOPIC_ARN:-}
+      # Tempos do 2PC (segundos)
+      TIMEOUT_2PC: ${TIMEOUT_2PC:-2}
+      INTERVALO_REENTREGA: ${INTERVALO_REENTREGA:-3}
+      INTERVALO_RESOLUCAO: ${INTERVALO_RESOLUCAO:-3}
+    ports: ["4000:4000"]
+    volumes: ["dados-0:/dados"]
+    restart: on-failure
+    healthcheck: &saude
+      test: ["CMD", "python", "-c", "import os,urllib.request as u; u.urlopen('http://localhost:%d/saude' % (int(os.environ['PORTA_BASE']) + int(os.environ['AGENCIA_ID'])), timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+  agencia-1:
+    build: ./agencia
+    environment:
+      <<: *comum
+      AGENCIA_ID: "1"
+      FALHA_2PC: "${FALHA_2PC_1:-}"
+    ports: ["4001:4001"]
+    volumes: ["dados-1:/dados"]
+    restart: on-failure
+    healthcheck: *saude
+  agencia-2:
+    build: ./agencia
+    environment:
+      <<: *comum
+      AGENCIA_ID: "2"
+      FALHA_2PC: "${FALHA_2PC_2:-}"
+    ports: ["4002:4002"]
+    volumes: ["dados-2:/dados"]
+    restart: on-failure
+    healthcheck: *saude
+  localstack:
+    profiles: ["nuvem"]   # so sobe com: docker compose --profile nuvem up
+    image: localstack/localstack
+    ports: ["4566:4566"]
+    environment:
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_AUTH_TOKEN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # o LocalStack cria containers para executar as Lambdas
+      - ./localstack:/scripts:ro
+      - ./serverless/build:/serverless:ro
+
+volumes:
+  dados-0:
+  dados-1:
+  dados-2:

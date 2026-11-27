@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from src import config
 from src.controllers.auth_controller import exigir_usuario_autenticado
 from src.services.extrato import montar_extrato
+from src.services.saldo import saldo_disponivel
 
 router = APIRouter(dependencies=[Depends(exigir_usuario_autenticado)])
 
@@ -24,11 +25,13 @@ def criar_conta(body: CriarContaBody, request: Request):
 
     if config.agencia_responsavel(body.id) != estado.id_agencia:
         raise HTTPException(status_code=400, detail=f"Conta {body.id} nao pertence a esta agencia.")
-    if body.id in estado.contas:
-        raise HTTPException(status_code=409, detail="Conta ja existe.")
 
-    ts = estado.relogio.evento_local()
-    estado.contas[body.id] = {"id": body.id, "nomeAluno": body.nomeAluno, "saldo": body.saldoInicial, "versao": ts}
+    with estado.estado.lock:
+        if body.id in estado.contas:
+            raise HTTPException(status_code=409, detail="Conta ja existe.")
+        ts = estado.relogio.evento_local()
+        estado.contas[body.id] = {"id": body.id, "nomeAluno": body.nomeAluno, "saldo": body.saldoInicial, "versao": ts}
+        estado.estado.salvar()
     estado.registro.registrar(
         "CRIAR_CONTA", ts, {"id": body.id, "nomeAluno": body.nomeAluno, "saldoInicial": body.saldoInicial}
     )
@@ -40,7 +43,8 @@ def consultar_saldo(id_conta: int, request: Request):
     conta = request.app.state.contas.get(id_conta)
     if not conta:
         raise HTTPException(status_code=404, detail="Conta nao encontrada nesta agencia.")
-    return conta
+    # reservado = dinheiro prometido a uma transacao 2PC ainda em curso
+    return {**conta, "reservado": conta.get("reservado", 0), "disponivel": saldo_disponivel(conta)}
 
 
 @router.get("/contas/{id_conta}/extrato")
@@ -60,9 +64,11 @@ def depositar(id_conta: int, body: ValorBody, request: Request):
     if not conta:
         raise HTTPException(status_code=404, detail="Conta nao encontrada nesta agencia.")
 
-    ts = estado.relogio.evento_local()
-    conta["saldo"] += body.valor
-    conta["versao"] = ts
+    with estado.estado.lock:
+        ts = estado.relogio.evento_local()
+        conta["saldo"] += body.valor
+        conta["versao"] = ts
+        estado.estado.salvar()
     estado.registro.registrar("DEPOSITO", ts, {"id": id_conta, "valor": body.valor, "novoSaldo": conta["saldo"]})
     return conta
 
@@ -73,11 +79,13 @@ def sacar(id_conta: int, body: ValorBody, request: Request):
     conta = estado.contas.get(id_conta)
     if not conta:
         raise HTTPException(status_code=404, detail="Conta nao encontrada nesta agencia.")
-    if conta["saldo"] < body.valor:
-        raise HTTPException(status_code=400, detail="Saldo insuficiente.")
-
-    ts = estado.relogio.evento_local()
-    conta["saldo"] -= body.valor
-    conta["versao"] = ts
+    with estado.estado.lock:
+        # o dinheiro reservado por uma transacao 2PC em curso nao pode ser sacado
+        if saldo_disponivel(conta) < body.valor:
+            raise HTTPException(status_code=400, detail="Saldo insuficiente.")
+        ts = estado.relogio.evento_local()
+        conta["saldo"] -= body.valor
+        conta["versao"] = ts
+        estado.estado.salvar()
     estado.registro.registrar("SAQUE", ts, {"id": id_conta, "valor": body.valor, "novoSaldo": conta["saldo"]})
     return conta

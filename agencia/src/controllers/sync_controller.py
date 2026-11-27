@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from src import config
 from src.controllers.auth_controller import exigir_usuario_autenticado
+from src.services.saldo import saldo_disponivel
 from src.services.vector_clock import comparar_vetores
 
 router = APIRouter(dependencies=[Depends(exigir_usuario_autenticado)])
@@ -41,55 +42,57 @@ def sincronizar(op: OperacaoSync, request: Request):
     if len(op.vetorBase) != config.NUMERO_AGENCIAS:
         raise HTTPException(status_code=400, detail=f"vetorBase deve ter {config.NUMERO_AGENCIAS} posicoes.")
 
-    conta = estado.contas.get(op.idConta)
-    if not conta:
-        raise HTTPException(status_code=404, detail="Conta nao encontrada nesta agencia.")
+    with estado.estado.lock:
+        conta = estado.contas.get(op.idConta)
+        if not conta:
+            raise HTTPException(status_code=404, detail="Conta nao encontrada nesta agencia.")
 
-    # Idempotencia: reenviar a mesma operacao (ex.: a resposta se perdeu na
-    # rede) nao aplica duas vezes.
-    if op.idOperacao in estado.operacoes_aplicadas:
-        return {"status": "JA_APLICADA", "idOperacao": op.idOperacao, "conta": conta}
+        # Idempotencia: reenviar a mesma operacao (ex.: a resposta se perdeu na
+        # rede) nao aplica duas vezes.
+        if op.idOperacao in estado.operacoes_aplicadas:
+            return {"status": "JA_APLICADA", "idOperacao": op.idOperacao, "conta": conta}
 
-    relacao = comparar_vetores(op.vetorBase, conta["versao"])
-    # Receber a operacao do cliente e um evento de "recebimento": o relogio
-    # incorpora o que o cliente sabia (regra 3 do relogio vetorial).
-    ts = estado.relogio.ao_receber(op.vetorBase)
+        relacao = comparar_vetores(op.vetorBase, conta["versao"])
+        # Receber a operacao do cliente e um evento de "recebimento": o relogio
+        # incorpora o que o cliente sabia (regra 3 do relogio vetorial).
+        ts = estado.relogio.ao_receber(op.vetorBase)
 
-    if relacao in ("ANTES", "CONCORRENTES"):
+        if relacao in ("ANTES", "CONCORRENTES"):
+            estado.registro.registrar(
+                "SYNC_CONFLITO",
+                ts,
+                {
+                    "idOperacao": op.idOperacao,
+                    "idConta": op.idConta,
+                    "tipo": op.tipo,
+                    "valor": op.valor,
+                    "vetorBase": op.vetorBase,
+                    "versaoServidor": conta["versao"],
+                    "relacao": relacao,
+                },
+            )
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "status": "CONFLITO",
+                    "relacao": relacao,
+                    "idOperacao": op.idOperacao,
+                    "vetorBase": op.vetorBase,
+                    "versaoServidor": conta["versao"],
+                    "conta": conta,
+                },
+            )
+
+        if op.tipo == "SAQUE" and saldo_disponivel(conta) < op.valor:
+            raise HTTPException(status_code=400, detail="Saldo insuficiente.")
+
+        conta["saldo"] += op.valor if op.tipo == "DEPOSITO" else -op.valor
+        conta["versao"] = ts
+        estado.operacoes_aplicadas[op.idOperacao] = op.idConta
+        estado.estado.salvar()
         estado.registro.registrar(
-            "SYNC_CONFLITO",
+            "SYNC_APLICADO",
             ts,
-            {
-                "idOperacao": op.idOperacao,
-                "idConta": op.idConta,
-                "tipo": op.tipo,
-                "valor": op.valor,
-                "vetorBase": op.vetorBase,
-                "versaoServidor": conta["versao"],
-                "relacao": relacao,
-            },
+            {"idOperacao": op.idOperacao, "idConta": op.idConta, "tipo": op.tipo, "valor": op.valor, "novoSaldo": conta["saldo"]},
         )
-        return JSONResponse(
-            status_code=409,
-            content={
-                "status": "CONFLITO",
-                "relacao": relacao,
-                "idOperacao": op.idOperacao,
-                "vetorBase": op.vetorBase,
-                "versaoServidor": conta["versao"],
-                "conta": conta,
-            },
-        )
-
-    if op.tipo == "SAQUE" and conta["saldo"] < op.valor:
-        raise HTTPException(status_code=400, detail="Saldo insuficiente.")
-
-    conta["saldo"] += op.valor if op.tipo == "DEPOSITO" else -op.valor
-    conta["versao"] = ts
-    estado.operacoes_aplicadas[op.idOperacao] = op.idConta
-    estado.registro.registrar(
-        "SYNC_APLICADO",
-        ts,
-        {"idOperacao": op.idOperacao, "idConta": op.idConta, "tipo": op.tipo, "valor": op.valor, "novoSaldo": conta["saldo"]},
-    )
-    return {"status": "APLICADA", "idOperacao": op.idOperacao, "conta": conta}
+        return {"status": "APLICADA", "idOperacao": op.idOperacao, "conta": conta}

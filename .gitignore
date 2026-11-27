@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.pyc
 .venv/
@@ -9,7 +9,10 @@ __pycache__/
 node_modules/
 
 # Dados gerados em tempo de execucao - nao versionar
-agencia/data/*.jsonl
+agencia/data/
+
+# Sprint 4: zips das Lambdas gerados (serverless/build) e segredos
+serverless/build/
 
 # JWT / segredos locais
 .env
