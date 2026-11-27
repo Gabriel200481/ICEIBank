@@ -27,6 +27,12 @@ def _movimento(evento: dict[str, Any], id_conta: int) -> dict[str, Any] | None:
         return {"descricao": f"Transferencia recebida da conta {d['idOrigem']}", "valor": d["valor"]}
     if tipo == "TRANSFERENCIA_CREDITO_REMOTO" and d.get("idConta") == id_conta:
         return {"descricao": f"Transferencia recebida da agencia {d['origemAgencia']}", "valor": d["valor"]}
+    if tipo == "2PC_COMMIT_APLICADO" and d.get("idConta") == id_conta:  # Sprint 4: transferencia via 2PC
+        enviada = d["tipo"] == "DEBITO"
+        return {
+            "descricao": f"Transferencia {'enviada' if enviada else 'recebida'} (2PC {d['txId'][:8]})",
+            "valor": -d["valor"] if enviada else d["valor"],
+        }
     if tipo == "SYNC_APLICADO" and d.get("idConta") == id_conta:
         sinal = 1 if d["tipo"] == "DEPOSITO" else -1
         rotulo = "Deposito" if d["tipo"] == "DEPOSITO" else "Saque"
