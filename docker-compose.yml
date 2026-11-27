@@ -10,6 +10,7 @@ services:
       # Nuvem local (Parte F). Com SNS_TOPIC_ARN vazio, a agencia nao publica eventos.
       AWS_ENDPOINT_URL: http://localstack:4566
       AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       SNS_TOPIC_ARN: ${SNS_TOPIC_ARN:-}
