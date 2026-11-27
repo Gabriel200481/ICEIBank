@@ -31,10 +31,14 @@ def test_extrato_lista_deposito_saque_em_ordem(cliente):
     assert sum(valores) == cliente.get("/contas/0").json()["saldo"]
 
 
-def test_transferencia_local_aparece_nas_duas_contas(cliente):
+def test_transferencia_2pc_aparece_nas_duas_contas(cliente):
+    # participante aplicando o COMMIT direto: o extrato e derivado do log de eventos
     cliente.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 100})
     cliente.post("/contas", json={"id": 3, "nomeAluno": "Caio", "saldoInicial": 0})
-    cliente.post("/transferencias", json={"idOrigem": 0, "idDestino": 3, "valor": 40})
+    p = cliente.app.state.participante
+    for tipo, conta in (("DEBITO", 0), ("CREDITO", 3)):
+        p.preparar("tx-123456789", {"tipo": tipo, "idConta": conta, "valor": 40.0}, 2)
+    p.decidir("tx-123456789", "COMMIT")
     origem = cliente.get("/contas/0/extrato").json()["movimentos"]
     destino = cliente.get("/contas/3/extrato").json()["movimentos"]
     assert origem[-1]["valor"] == -40 and "enviada" in origem[-1]["descricao"]

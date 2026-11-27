@@ -162,7 +162,8 @@ def cliente(tmp_path):
     app = criar_app(id_agencia=1, iniciar_consumidor=False, iniciar_bully=False)
     app.state.registro.caminho_arquivo = tmp_path / "eventos.jsonl"
     app.state.bully._agendar = lambda f: None  # nao dispara eleicao de verdade
-    return TestClient(app)
+    # /eleicao e /coordenador sao rotas internas: exigem o token entre agencias (Sprint 4)
+    return TestClient(app, headers={"x-token-interno": "token-de-teste"})
 
 
 def test_get_lider_sem_lider_definido(cliente):
@@ -288,3 +289,18 @@ def test_thread_de_heartbeat_inicia_e_para(tmp_path, rede):
     assert a2._thread_heartbeat.is_alive()
     a2.parar_heartbeat()
     assert not a2._thread_heartbeat.is_alive()
+
+
+def test_rotas_internas_do_bully_recusam_chamada_sem_token(cliente):
+    cliente.headers.pop("x-token-interno")
+    assert cliente.post("/bully/eleicao", json={"origemId": 0, "vetor": [1, 0, 0]}).status_code == 401
+    assert cliente.post("/bully/coordenador", json={"liderId": 2, "vetor": [0, 0, 3]}).status_code == 401
+    assert cliente.get("/bully/lider").status_code == 200  # continua publico (app Flutter)
+
+
+def test_lider_com_id_menor_que_o_meu_e_rejeitado_e_disputo(tmp_path, rede):
+    disputas = []
+    a1 = montar(tmp_path, rede, 1, agendar=lambda f: disputas.append(f))
+    a1.receber_coordenador(0, [1, 0, 0])  # a 0 subiu antes e se autoproclamou
+    assert a1.lider_atual is None
+    assert len(disputas) == 1

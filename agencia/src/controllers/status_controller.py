@@ -16,3 +16,9 @@ def status(request: Request):
         "timestampVetorialAtual": estado.relogio.vetor,
         "quantidadeContas": len(estado.contas),
     }
+
+
+@router.get("/saude")
+def saude():
+    """Healthcheck do docker compose: publico e sem estado."""
+    return {"status": "ok"}

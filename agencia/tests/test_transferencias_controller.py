@@ -1,130 +1,109 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from src.app import criar_app
-from src.controllers import transferencias_controller
 from src.services import auth_service
-
-
-def _criar_cliente(tmp_path, id_agencia):
-    app = criar_app(id_agencia=id_agencia, iniciar_consumidor=False)
-    app.state.registro.caminho_arquivo = tmp_path / f"eventos-agencia-{id_agencia}.jsonl"
-    cliente = TestClient(app)
-    cliente.headers.update({"Authorization": f"Bearer {auth_service.criar_token('aluno')}"})
-    return app, cliente
+from tests.rede_2pc import montar_agencias
 
 
 @pytest.fixture
-def cliente(tmp_path):
-    _, cliente = _criar_cliente(tmp_path, id_agencia=0)
-    return cliente
+def agencias():
+    apps, rede = montar_agencias()
+    clientes = {i: TestClient(a) for i, a in apps.items()}
+    for c in clientes.values():
+        c.headers.update({"Authorization": f"Bearer {auth_service.criar_token('aluno')}"})
+    return apps, rede, clientes
 
 
-def test_transferencia_local_mesma_agencia(cliente):
-    # conta 0 e conta 3 pertencem as duas a agencia 0 (0%3 == 3%3 == 0)
-    cliente.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 100})
-    cliente.post("/contas", json={"id": 3, "nomeAluno": "Bia", "saldoInicial": 10})
-
-    resposta = cliente.post("/transferencias", json={"idOrigem": 0, "idDestino": 3, "valor": 30})
-
-    assert resposta.status_code == 200
-    assert "mesma agencia" in resposta.json()["mensagem"]
-    assert cliente.get("/contas/0").json()["saldo"] == 70
-    assert cliente.get("/contas/3").json()["saldo"] == 40
+def _conta(clientes, id_conta, saldo):
+    clientes[id_conta % 3].post("/contas", json={"id": id_conta, "nomeAluno": "X", "saldoInicial": saldo})
 
 
-def test_transferencia_conta_origem_nao_encontrada(cliente):
-    resposta = cliente.post("/transferencias", json={"idOrigem": 0, "idDestino": 3, "valor": 30})
-    assert resposta.status_code == 404
+def _saldo(clientes, id_conta):
+    return clientes[id_conta % 3].get(f"/contas/{id_conta}").json()
 
 
-def test_transferencia_saldo_insuficiente(cliente):
-    cliente.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 10})
-    cliente.post("/contas", json={"id": 3, "nomeAluno": "Bia", "saldoInicial": 0})
-    resposta = cliente.post("/transferencias", json={"idOrigem": 0, "idDestino": 3, "valor": 500})
-    assert resposta.status_code == 400
+def test_transferencia_entre_agencias_commit(agencias):
+    _, _, c = agencias
+    _conta(c, 0, 100)
+    _conta(c, 1, 0)
+    # a agencia 0 nao e a lider (2): encaminha o pedido
+    r = c[0].post("/transferencias", json={"idOrigem": 0, "idDestino": 1, "valor": 40})
+    assert r.status_code == 200
+    assert r.json()["resultado"] == "COMMIT" and "concluida" in r.json()["mensagem"]
+    assert (_saldo(c, 0)["saldo"], _saldo(c, 0)["reservado"]) == (60, 0)
+    assert (_saldo(c, 1)["saldo"], _saldo(c, 1)["reservado"]) == (40, 0)
 
 
-def test_transferencia_entre_agencias_publica_mensagem_e_destino_processa(tmp_path, monkeypatch):
-    app_origem, cliente_origem = _criar_cliente(tmp_path, id_agencia=0)
-    app_destino, cliente_destino = _criar_cliente(tmp_path, id_agencia=1)
-
-    cliente_origem.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 100})
-    cliente_destino.post("/contas", json={"id": 1, "nomeAluno": "Bia", "saldoInicial": 0})
-
-    def fake_publicar(routing_key, mensagem):
-        # Simula o papel do broker: entrega a mensagem direto para o
-        # consumidor da agencia de destino, sem precisar de um RabbitMQ
-        # real neste teste (validado separadamente em test_mensageria.py).
-        assert routing_key == "agencia.1.creditar"
-        app_destino.state.processar_credito_recebido(mensagem)
-
-    monkeypatch.setattr(transferencias_controller.mensageria, "publicar", fake_publicar)
-
-    resposta = cliente_origem.post("/transferencias", json={"idOrigem": 0, "idDestino": 1, "valor": 40})
-
-    assert resposta.status_code == 200
-    assert "assincrona" in resposta.json()["mensagem"]
-    assert cliente_origem.get("/contas/0").json()["saldo"] == 60
-    assert cliente_destino.get("/contas/1").json()["saldo"] == 40
-
-    assert app_origem.state.relogio.vetor == [3, 0, 0]
-    assert app_destino.state.relogio.vetor == [3, 2, 0]
-    # regra 3 do relogio vetorial: quem recebe domina quem enviou em toda
-    # posicao (relacao causal real, nao so timestamps diferentes).
-    assert all(app_origem.state.relogio.vetor[i] <= app_destino.state.relogio.vetor[i] for i in range(3))
+def test_transferencia_mesma_agencia_participa_duas_vezes(agencias):
+    _, _, c = agencias
+    _conta(c, 0, 100)
+    _conta(c, 3, 10)
+    r = c[0].post("/transferencias", json={"idOrigem": 0, "idDestino": 3, "valor": 30})
+    assert r.status_code == 200
+    assert (_saldo(c, 0)["saldo"], _saldo(c, 3)["saldo"]) == (70, 40)
 
 
-def test_transferencia_entre_agencias_responde_200_mesmo_sem_ninguem_consumindo(tmp_path, monkeypatch):
-    """Diferenca central em relacao ao Sprint 1: a resposta HTTP nao depende
-    mais de a agencia de destino estar no ar. O debito e aplicado e a
-    mensagem e publicada de qualquer forma - quem consome (ou nao, ainda)
-    e assunto da fila, nao da requisicao HTTP."""
-    app_origem, cliente_origem = _criar_cliente(tmp_path, id_agencia=0)
-    cliente_origem.post("/contas", json={"id": 0, "nomeAluno": "Ana", "saldoInicial": 100})
+def test_saldo_insuficiente_aborta_sem_efeito_residual(agencias):
+    _, _, c = agencias
+    _conta(c, 0, 10)
+    _conta(c, 1, 0)
+    r = c[1].post("/transferencias", json={"idOrigem": 0, "idDestino": 1, "valor": 500})
+    assert r.status_code == 422
+    assert "Saldo insuficiente" in r.json()["detail"]
+    assert (_saldo(c, 0)["saldo"], _saldo(c, 0)["reservado"], _saldo(c, 1)["saldo"]) == (10, 0, 0)
 
-    mensagens_publicadas = []
-    monkeypatch.setattr(
-        transferencias_controller.mensageria,
-        "publicar",
-        lambda routing_key, mensagem: mensagens_publicadas.append((routing_key, mensagem)),
+
+def test_conta_de_destino_inexistente_nao_deixa_debito_aplicado(agencias):
+    """O caso em que, no Sprint 2, o dinheiro sumia."""
+    _, _, c = agencias
+    _conta(c, 0, 100)
+    r = c[0].post("/transferencias", json={"idOrigem": 0, "idDestino": 99, "valor": 40})
+    assert r.status_code == 422
+    assert (_saldo(c, 0)["saldo"], _saldo(c, 0)["reservado"]) == (100, 0)
+
+
+def test_conta_de_origem_inexistente_aborta(agencias):
+    _, _, c = agencias
+    _conta(c, 1, 0)
+    assert c[0].post("/transferencias", json={"idOrigem": 0, "idDestino": 1, "valor": 5}).status_code == 422
+
+
+@pytest.mark.parametrize(
+    "corpo",
+    [
+        {"idOrigem": 0, "idDestino": 0, "valor": 5},
+        {"idOrigem": 0, "idDestino": 1, "valor": 0},
+        {"idOrigem": 0, "idDestino": 1, "valor": -5},
+    ],
+)
+def test_pedido_invalido_400(agencias, corpo):
+    assert agencias[2][0].post("/transferencias", json=corpo).status_code == 400
+
+
+def test_sem_lider_503(agencias):
+    apps, _, c = agencias
+    apps[0].state.bully._lider_atual = None
+    assert c[0].post("/transferencias", json={"idOrigem": 0, "idDestino": 1, "valor": 5}).status_code == 503
+
+
+def test_transferencia_exige_jwt(agencias):
+    _, _, c = agencias
+    c[0].headers.pop("Authorization")
+    assert c[0].post("/transferencias", json={"idOrigem": 0, "idDestino": 1, "valor": 5}).status_code == 401
+
+
+def test_lider_coordena_diretamente(agencias):
+    _, _, c = agencias
+    _conta(c, 0, 100)
+    _conta(c, 1, 0)
+    assert c[2].post("/transferencias", json={"idOrigem": 0, "idDestino": 1, "valor": 1}).status_code == 200
+
+
+def test_coordenar_numa_agencia_que_nao_e_lider_409(agencias):
+    _, _, c = agencias
+    r = c[0].post(
+        "/2pc/coordenar",
+        json={"idOrigem": 0, "idDestino": 1, "valor": 1},
+        headers={"x-token-interno": "token-de-teste"},
     )
-
-    resposta = cliente_origem.post("/transferencias", json={"idOrigem": 0, "idDestino": 1, "valor": 40})
-
-    assert resposta.status_code == 200
-    assert cliente_origem.get("/contas/0").json()["saldo"] == 60
-    assert len(mensagens_publicadas) == 1
-    assert mensagens_publicadas[0][0] == "agencia.1.creditar"
-    assert mensagens_publicadas[0][1]["idConta"] == 1
-    assert mensagens_publicadas[0][1]["valor"] == 40
-
-
-def test_processar_credito_recebido_usa_ao_receber_do_relogio_vetorial(tmp_path):
-    app_destino, cliente_destino = _criar_cliente(tmp_path, id_agencia=1)
-    cliente_destino.post("/contas", json={"id": 1, "nomeAluno": "Bia", "saldoInicial": 0})
-
-    app_destino.state.relogio.vetor = [10, 5, 0]  # agencia de destino "adiantada"
-
-    app_destino.state.processar_credito_recebido(
-        {"idConta": 1, "valor": 50, "vetorEnvio": [3, 0, 0], "origemAgencia": 0}
-    )
-
-    assert cliente_destino.get("/contas/1").json()["saldo"] == 50
-    # max([10,5,0], [3,0,0]) = [10,5,0], depois incrementa a propria posicao (1) -> [10,6,0]
-    assert app_destino.state.relogio.vetor == [10, 6, 0]
-
-
-def test_processar_credito_recebido_com_conta_inexistente_registra_falha(tmp_path):
-    """Reproduz a limitacao conhecida deste sprint (secao 2 do roteiro): se a
-    conta nao existe quando a mensagem chega (ex.: a agencia reiniciou e
-    perdeu o estado em memoria), o credito nao e aplicado silenciosamente -
-    fica registrado no log como CREDITO_REMOTO_FALHOU."""
-    app_destino, _ = _criar_cliente(tmp_path, id_agencia=1)
-
-    app_destino.state.processar_credito_recebido(
-        {"idConta": 99, "valor": 50, "vetorEnvio": [1, 0, 0], "origemAgencia": 0}
-    )
-
-    linhas = app_destino.state.registro.caminho_arquivo.read_text(encoding="utf-8").strip().splitlines()
-    assert any('"CREDITO_REMOTO_FALHOU"' in linha for linha in linhas)
+    assert r.status_code == 409

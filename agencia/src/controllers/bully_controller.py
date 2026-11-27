@@ -1,13 +1,15 @@
 """Rotas do algoritmo de Bully (Sprint 3).
 
 Sem JWT de proposito: sao chamadas entre agencias (maquina a maquina), nao de
-um usuario - o mesmo raciocinio do consumidor de mensagens do Sprint 2. Em
-producao isso exigiria autenticacao entre servicos (mTLS ou token de servico);
-ver RESPOSTAS.md.
+um usuario. No Sprint 4 /eleicao e /coordenador passaram a exigir o token
+interno compartilhado (x-token-interno); GET /lider continua publico porque o
+app Flutter e o heartbeat dependem dele.
 """
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
+
+from src.middlewares.autenticacao_interna import autenticacao_interna
 
 router = APIRouter(prefix="/bully")
 
@@ -22,12 +24,12 @@ class CoordenadorBody(BaseModel):
     vetor: list[int]
 
 
-@router.post("/eleicao")
+@router.post("/eleicao", dependencies=[Depends(autenticacao_interna)])
 def eleicao(body: EleicaoBody, request: Request):
     return request.app.state.bully.receber_eleicao(body.origemId, body.vetor)
 
 
-@router.post("/coordenador")
+@router.post("/coordenador", dependencies=[Depends(autenticacao_interna)])
 def coordenador(body: CoordenadorBody, request: Request):
     request.app.state.bully.receber_coordenador(body.liderId, body.vetor)
     return {"mensagem": "Coordenador registrado."}

@@ -18,13 +18,18 @@ from src.controllers import (
     auth_controller,
     bully_controller,
     contas_controller,
+    protocolo_controller,
     sync_controller,
     status_controller,
     transferencias_controller,
 )
 from src.services import mensageria
+from src.services.armazenamento import EstadoDuravel
 from src.services.bully import Bully, enviar_http, ping_http
+from src.services.coordenador import Coordenador
 from src.services.event_log import RegistroEventos
+from src.services.eventos_nuvem import EventosNuvem
+from src.services.participante import Participante
 from src.services.vector_clock import RelogioVetorial
 
 
@@ -52,18 +57,20 @@ def criar_app(
         allow_headers=["*"],
     )
 
-    # Estado em memoria da agencia - sem banco de dados neste sprint (Parte C).
+    # Estado duravel (Sprint 4): contas, operacoes de sincronizacao ja aplicadas
+    # (idempotencia: idOperacao -> idConta) e estado das transacoes 2PC, em disco.
+    # O relogio vetorial NAO e persistido: reinicia em zero (limitacao conhecida).
+    estado = EstadoDuravel(id_agencia)
     relogio = RelogioVetorial(id_agencia, config.NUMERO_AGENCIAS)
-    registro = RegistroEventos(f"agencia-{id_agencia}")
-    contas: dict = {}
-    # Operacoes de sincronizacao ja aplicadas (idempotencia): idOperacao -> idConta
-    operacoes_aplicadas: dict = {}
+    registro = RegistroEventos(f"agencia-{id_agencia}", pasta_dados=config.DATA_DIR)
+    contas = estado.contas
 
     app.state.id_agencia = id_agencia
     app.state.relogio = relogio
     app.state.registro = registro
+    app.state.estado = estado
     app.state.contas = contas
-    app.state.operacoes_aplicadas = operacoes_aplicadas
+    app.state.operacoes_aplicadas = estado.operacoes_aplicadas
 
     # Eleicao de lider (Sprint 3): Bully entre as agencias.
     bully = Bully(
@@ -77,12 +84,26 @@ def criar_app(
     )
     app.state.bully = bully
 
+    # 2PC (Sprint 4): a lider eleita pelo Bully coordena; as agencias das duas
+    # contas participam.
+    participante = Participante(id_agencia, relogio, registro, estado)
+    coordenador = Coordenador(id_agencia, relogio, registro, estado, EventosNuvem(id_agencia, relogio, registro))
+    app.state.participante = participante
+    app.state.coordenador = coordenador
+    # Recuperacao ANTES de aceitar requisicoes: decide o destino das transacoes
+    # que estavam em andamento quando a agencia caiu.
+    coordenador.recuperar()
+
     app.include_router(auth_controller.router)
     app.include_router(contas_controller.router)
     app.include_router(transferencias_controller.router)
     app.include_router(status_controller.router)
     app.include_router(bully_controller.router)
     app.include_router(sync_controller.router)
+    app.include_router(protocolo_controller.router)
+
+    if not config.TOKEN_INTERNO:
+        print("AVISO: TOKEN_INTERNO nao definido - as rotas internas (Bully e 2PC) recusarao toda chamada.")
 
     @app.get("/")
     def raiz():
@@ -115,8 +136,10 @@ def criar_app(
             )
             return
 
-        conta["saldo"] += valor
-        conta["versao"] = vetor
+        with estado.lock:
+            conta["saldo"] += valor
+            conta["versao"] = vetor
+            estado.salvar()
         registro.registrar(
             "TRANSFERENCIA_CREDITO_REMOTO",
             vetor,
@@ -127,7 +150,7 @@ def criar_app(
     # (os testes chamam essa funcao diretamente, simulando a entrega).
     app.state.processar_credito_recebido = _processar_credito_recebido
 
-    if iniciar_consumidor:
+    if iniciar_consumidor and os.environ.get("RABBITMQ_URL"):
         mensageria.assinar(id_agencia, _processar_credito_recebido)
 
     if iniciar_bully and not config.BULLY_DESLIGADO:
@@ -135,6 +158,8 @@ def criar_app(
         # outras agencias responderem; a eleicao inicial roda em thread.
         def _eleicao_inicial() -> None:
             time.sleep(config.BULLY_ATRASO_INICIAL)
+            participante.iniciar_resolucao()
+            coordenador.iniciar_reentrega()
             bully.iniciar_eleicao()
             bully.iniciar_heartbeat(config.HEARTBEAT_INTERVALO)
 

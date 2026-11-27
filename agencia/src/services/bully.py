@@ -17,6 +17,7 @@ from typing import Callable
 
 import httpx
 
+from src import config
 from src.services.event_log import RegistroEventos
 from src.services.vector_clock import RelogioVetorial
 
@@ -32,7 +33,9 @@ def enviar_http(agencias: list[dict], timeout: float = TIMEOUT_HTTP) -> Enviar:
 
     def enviar(id_destino: int, caminho: str, corpo: dict) -> bool:
         try:
-            resposta = httpx.post(urls[id_destino] + caminho, json=corpo, timeout=timeout)
+            resposta = httpx.post(
+                urls[id_destino] + caminho, json=corpo, headers={"x-token-interno": config.TOKEN_INTERNO}, timeout=timeout
+            )
         except httpx.HTTPError:
             # Cobre timeout e conexao recusada: para o Bully, "nao respondeu"
             # significa "considerada fora do ar".
@@ -163,6 +166,12 @@ class Bully:
 
     def receber_coordenador(self, lider_id: int, vetor: list[int]) -> None:
         ts = self.relogio.ao_receber(vetor)
+        if lider_id < self.id_agencia:
+            # Regra do Bully: lider com id MENOR que o meu nao vale (uma agencia que
+            # subiu antes das outras se autoproclamou). Disputo a lideranca.
+            self.registro.registrar("LIDER_MENOR_REJEITADO", ts, {"liderId": lider_id, "agencia": self.id_agencia})
+            self._agendar(self.iniciar_eleicao)
+            return
         if self._definir_lider(lider_id):
             self.registro.registrar("NOVO_LIDER", ts, {"liderId": lider_id, "agencia": self.id_agencia})
         self._coordenador_recebido.set()
