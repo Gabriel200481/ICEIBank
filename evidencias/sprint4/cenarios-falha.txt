@@ -1,0 +1,46 @@
+
+=== Base: transferencia entre agencias via 2PC (cliente fala com a 0, lider e a 2) ===
+   [OK] 200 COMMIT {'txId': '97344da0-1b43-45d4-ae39-c45829913e31', 'resultado': 'COMMIT', 'motivos': [], 'pendentesDeConfirmacao': [], 'mensagem': 'Transferencia concluida (2PC: COMMIT).'}
+   [OK] saldos 900/1100 
+   [OK] base: soma dos saldos == 3000.0 e nenhuma reserva presa (soma=3000.0, reservas=0.0, saldos=[900.0, 1100.0, 1000.0])
+   [OK] logs com as duas fases 
+
+=== Abort: saldo insuficiente e conta inexistente, sem efeito residual ===
+   [OK] 422 ABORT com motivo Transferencia abortada: Saldo insuficiente.
+   [OK] 422 ABORT (destino 99 inexistente) e debito nao aplicado 
+   [OK] abort: soma dos saldos == 3000.0 e nenhuma reserva presa (soma=3000.0, reservas=0.0, saldos=[900.0, 1100.0, 1000.0])
+
+=== Cenario 1: participante fora do ar na fase 1 ===
+   [OK] ABORT por timeout (422) Transferencia abortada: Agencia nao respondeu a tempo.
+   [OK] cenario 1: soma dos saldos == 3000.0 e nenhuma reserva presa (soma=3000.0, reservas=0.0, saldos=[900.0, 1100.0, 1000.0])
+
+=== Cenario 2: participante cai depois de votar SIM (participante-apos-votar) e antes de responder ===
+   [OK] coordenador decide ABORT (timeout conta como NAO) {"txId":"f4241bf8-7838-4e67-b262-9ba699fd99e1","resultado":"ABORT","motivos":["Agencia nao respondeu a tempo."],"pendentesDeConfirmacao":[],"detail":"Transferencia abortada: Agencia nao respondeu a tempo."}
+   [OK] agencia 1 caiu e foi reiniciada (quedas=1)
+   [OK] agencia 1 resolveu a duvida consultando o coordenador 
+   [OK] cenario 2: soma dos saldos == 3000.0 e nenhuma reserva presa (soma=3000.0, reservas=0.0, saldos=[900.0, 1100.0, 1000.0])
+
+=== Cenario 3: coordenador cai antes de decidir (coordenador-antes-de-decidir) ===
+   [OK] cliente recebe 503 (coordenador caiu) {"detail":"Coordenador indisponivel. O resultado sera resolvido sozinho: confira os saldos antes de tentar de novo."}
+   [OK] coordenador registrou aborto presumido ao voltar 
+   [OK] cenario 3: soma dos saldos == 3000.0 e nenhuma reserva presa (soma=3000.0, reservas=0.0, saldos=[900.0, 1100.0, 1000.0])
+   [OK] participantes sairam da duvida sem ficar bloqueados 
+
+=== Cenario 4: coordenador cai depois de decidir COMMIT (coordenador-apos-decidir) ===
+   [OK] cliente recebe 503, mas a decisao COMMIT ja estava gravada {"detail":"Coordenador indisponivel. O resultado sera resolvido sozinho: confira os saldos antes de tentar de novo."}
+   [OK] a transferencia se completa depois (apesar do 503) (antes=(900.0, 1100.0), depois=(800.0, 1200.0))
+   [OK] cenario 4: soma dos saldos == 3000.0 e nenhuma reserva presa (soma=3000.0, reservas=0.0, saldos=[800.0, 1200.0, 1000.0])
+
+=== Cenario 5: o bloqueio do 2PC (coordenador nao volta) ===
+   [OK] cliente recebe 503 
+   [OK] participante registrou 2PC_BLOQUEADA_AGUARDANDO_COORDENADOR 
+   [OK] reserva presa: reservado=100 e disponivel = saldo - 100 {'id': 0, 'nomeAluno': 'Conta0', 'saldo': 800.0, 'versao': [12, 0, 6], 'reservado': 100.0, 'disponivel': 700.0}
+   [OK] continua preso depois de varias tentativas (nao decide sozinho) 
+   [OK] saque que inclui o valor reservado e recusado {"detail":"Saldo insuficiente."}
+   [OK] participante PREPARADO (em duvida) 
+   [OK] cenario 5 (apos o coordenador voltar): soma dos saldos == 3000.0 e nenhuma reserva presa (soma=3000.0, reservas=0.0, saldos=[800.0, 1200.0, 1000.0])
+   [OK] bloqueio terminou 
+
+Logs e estados em C:\Users\Gabriel\AppData\Local\Temp\iceibank-cenarios-ax1wyotr
+
+RESULTADO: TODOS OS CENARIOS OK
